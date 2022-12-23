@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-TESTPATH="/data/DTU/dtu-test" 						# path to dataset dtu_test
-TESTLIST="lists/dtu/test.txt"
+TESTPATH="data/dtu_test" 						# path to dataset dtu_test
+TESTLIST="data/dtu_test/list.txt"
 CKPT_FILE="checkpoints/model_dtu.ckpt"			   # path to checkpoint file, you need to use the model_dtu.ckpt for testing
-FUSIBLE_PATH="" 								 	# path to fusible of gipuma
+FUSIBLE_PATH="gipuma/fusibile/build/fusibile" 								 	# path to fusible of gipuma
 OUTDIR="outputs/dtu_testing" 						  # path to output
+BATCH_SIZE=3
+
 if [ ! -d $OUTDIR ]; then
 	mkdir -p $OUTDIR
 fi
@@ -11,7 +13,7 @@ fi
 
 python test.py \
 --dataset=general_eval \
---batch_size=1 \
+--batch_size=$BATCH_SIZE \
 --testpath=$TESTPATH  \
 --testlist=$TESTLIST \
 --loadckpt=$CKPT_FILE \

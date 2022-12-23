@@ -521,8 +521,8 @@ def entropy_loss(prob_volume, depth_gt, mask, depth_value, return_prob_map=False
     wta_depth_map = torch.gather(depth_value_mat, 1, wta_index_map).squeeze(1)
 
     if return_prob_map:
-        photometric_confidence = torch.max(prob_volume, dim=1)[0] # output shape dimension B * H * W
-        return masked_cross_entropy, wta_depth_map, photometric_confidence
+        photo_confidence = torch.max(prob_volume, dim=1)[0] # output shape dimension B * H * W
+        return masked_cross_entropy, wta_depth_map, photo_confidence
     return masked_cross_entropy, wta_depth_map
 
 

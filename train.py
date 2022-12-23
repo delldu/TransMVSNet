@@ -39,12 +39,10 @@ parser.add_argument('--eval_freq', type=int, default=1, help='eval freq')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed')
 parser.add_argument('--pin_m', action='store_true', help='data loader pin memory')
 parser.add_argument("--local_rank", type=int, default=0)
-parser.add_argument('--share_cr', action='store_true', help='whether share the cost volume regularization')
 parser.add_argument('--ndepths', type=str, default="48,32,8", help='ndepths')
 parser.add_argument('--depth_inter_r', type=str, default="4,2,1", help='depth_intervals_ratio')
 parser.add_argument('--dlossw', type=str, default="0.5,1.0,2.0", help='depth loss weight for different stage')
 parser.add_argument('--cr_base_chs', type=str, default="8,8,8", help='cost regularization base channels')
-parser.add_argument('--grad_method', type=str, default="detach", choices=["detach", "undetach"], help='grad method')
 parser.add_argument('--using_apex', action='store_true', help='using apex, need to install apex')
 parser.add_argument('--sync_bn', action='store_true',help='enabling apex sync BN.')
 parser.add_argument('--opt-level', type=str, default="O0")
@@ -154,7 +152,7 @@ def train_sample(model, model_loss, optimizer, sample, args):
     depth_gt = depth_gt_ms["stage{}".format(num_stage)]
     mask = mask_ms["stage{}".format(num_stage)]
     try:
-        outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
+        outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrix"], sample_cuda["depth_values"])
         depth_est = outputs["depth"]
 
         loss, depth_loss, entropy_loss, depth_entropy = model_loss(outputs, depth_gt_ms, mask_ms, dlossw=[float(e) for e in args.dlossw.split(",") if e])
@@ -213,7 +211,7 @@ def test_sample_depth(model, model_loss, sample, args):
     depth_gt = depth_gt_ms["stage{}".format(num_stage)]
     mask = mask_ms["stage{}".format(num_stage)]
 
-    outputs = model_eval(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
+    outputs = model_eval(sample_cuda["imgs"], sample_cuda["proj_matrix"], sample_cuda["depth_values"])
     depth_est = outputs["depth"]
 
     loss, depth_loss, entropy_loss, depth_entropy = model_loss(outputs, depth_gt_ms, mask_ms, dlossw=[float(e) for e in args.dlossw.split(",") if e])
@@ -325,11 +323,9 @@ if __name__ == '__main__':
         print_args(args)
 
     # model, optimizer
-    model = TransMVSNet(refine=False, ndepths=[int(nd) for nd in args.ndepths.split(",") if nd],
+    model = TransMVSNet(ndepths=[int(nd) for nd in args.ndepths.split(",") if nd],
                           depth_interals_ratio=[float(d_i) for d_i in args.depth_inter_r.split(",") if d_i],
-                          share_cr=args.share_cr,
-                          cr_base_chs=[int(ch) for ch in args.cr_base_chs.split(",") if ch],
-                          grad_method=args.grad_method)
+                          cr_base_chs=[int(ch) for ch in args.cr_base_chs.split(",") if ch])
     model.to(device)
     model_loss = trans_mvsnet_loss
 

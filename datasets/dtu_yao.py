@@ -3,6 +3,7 @@ import numpy as np
 import os, cv2, time, math
 from PIL import Image
 from datasets.data_io import *
+import pdb
 
 # the DTU dataset preprocessed by Yao Yao (only for training)
 class MVSDataset(Dataset):
@@ -19,6 +20,8 @@ class MVSDataset(Dataset):
 
         assert self.mode in ["train", "val", "test"]
         self.metas = self.build_list()
+
+        pdb.set_trace()
 
     def build_list(self):
         metas = []
@@ -40,6 +43,8 @@ class MVSDataset(Dataset):
                     for light_idx in range(7):
                         metas.append((scan, light_idx, ref_view, src_views))
         print("dataset", self.mode, "metas:", len(metas))
+        pdb.set_trace()
+
         return metas
 
     def __len__(self):
@@ -56,6 +61,9 @@ class MVSDataset(Dataset):
         # depth_min & depth_interval: line 11
         depth_min = float(lines[11].split()[0])
         depth_interval = float(lines[11].split()[1]) * self.interval_scale
+
+        pdb.set_trace()
+
         return intrinsics, extrinsics, depth_min, depth_interval
 
     def read_img(self, filename):
@@ -76,6 +84,8 @@ class MVSDataset(Dataset):
         start_h, start_w = (h - target_h)//2, (w - target_w)//2
         hr_img_crop = hr_img_ds[start_h: start_h + target_h, start_w: start_w + target_w]
 
+        pdb.set_trace()
+
         return hr_img_crop
 
     def read_mask_hr(self, filename):
@@ -90,6 +100,8 @@ class MVSDataset(Dataset):
             "stage2": cv2.resize(np_img, (w//2, h//2), interpolation=cv2.INTER_NEAREST),
             "stage3": np_img,
         }
+        pdb.set_trace()
+
         return np_img_ms
 
     def read_depth(self, filename):
@@ -118,7 +130,9 @@ class MVSDataset(Dataset):
         imgs = []
         mask = None
         depth_values = None
-        proj_matrices = []
+        proj_matrix = []
+
+        pdb.set_trace()
 
         for i, vid in enumerate(view_ids):
             # NOTE that the id in image file names is from 1 to 49 (not 0~48)
@@ -140,7 +154,7 @@ class MVSDataset(Dataset):
             proj_mat[0, :4, :4] = extrinsics
             proj_mat[1, :3, :3] = intrinsics
 
-            proj_matrices.append(proj_mat)
+            proj_matrix.append(proj_mat)
 
             if i == 0:  # reference view
                 mask_read_ms = self.read_mask_hr(mask_filename_hr)
@@ -157,20 +171,22 @@ class MVSDataset(Dataset):
         #all
         imgs = np.stack(imgs).transpose([0, 3, 1, 2])
         #ms proj_mats
-        proj_matrices = np.stack(proj_matrices)
-        stage2_pjmats = proj_matrices.copy()
-        stage2_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 2
-        stage3_pjmats = proj_matrices.copy()
-        stage3_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 4
+        proj_matrix = np.stack(proj_matrix)
+        stage2_pjmats = proj_matrix.copy()
+        stage2_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 2
+        stage3_pjmats = proj_matrix.copy()
+        stage3_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 4
 
-        proj_matrices_ms = {
-            "stage1": proj_matrices,
+        proj_matrix_ms = {
+            "stage1": proj_matrix,
             "stage2": stage2_pjmats,
             "stage3": stage3_pjmats
         }
 
+        pdb.set_trace()
+
         return {"imgs": imgs,
-                "proj_matrices": proj_matrices_ms,
+                "proj_matrix": proj_matrix_ms,
                 "depth": depth_ms,
                 "depth_values": depth_values,
                 "depth_interval": depth_interval,

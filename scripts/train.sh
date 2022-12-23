@@ -7,7 +7,7 @@ if [ ! -d $LOG_DIR ]; then
 fi
 
 NGPUS=8
-BATCH_SIZE=1
+BATCH_SIZE=2
 python -m torch.distributed.launch --nproc_per_node=$NGPUS train.py \
 	--logdir=$LOG_DIR \
 	--dataset=dtu_yao \

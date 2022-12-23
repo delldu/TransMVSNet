@@ -4,6 +4,7 @@ import numpy as np
 import os, cv2
 from PIL import Image
 from datasets.data_io import *
+import pdb
 
 # Test any dataset with scale and center crop
 s_h, s_w = 0, 0
@@ -41,6 +42,7 @@ class MVSDataset(Dataset):
         assert self.mode == "test"
         self.metas = self.build_list()
         print('Data Loader : data_eval_T&T**************' )
+        pdb.set_trace()
 
     def build_list(self):
         metas = []
@@ -129,7 +131,7 @@ class MVSDataset(Dataset):
 
         imgs = []
         depth_values = None
-        proj_matrices = []
+        proj_matrix = []
 
         for i, vid in enumerate(view_ids):
             img_filename = os.path.join(self.datapath, '{}/images/{:0>8}.jpg'.format(scan, vid))
@@ -166,7 +168,7 @@ class MVSDataset(Dataset):
             proj_mat = np.zeros(shape=(2, 4, 4), dtype=np.float32)  #
             proj_mat[0, :4, :4] = extrinsics
             proj_mat[1, :3, :3] = intrinsics
-            proj_matrices.append(proj_mat)
+            proj_matrix.append(proj_mat)
 
             if i == 0:  # reference view
                 if self.inverse_depth is False:
@@ -181,20 +183,20 @@ class MVSDataset(Dataset):
 
 
         imgs = np.stack(imgs).transpose([0, 3, 1, 2]) # B,C,H,W
-        proj_matrices = np.stack(proj_matrices)
+        proj_matrix = np.stack(proj_matrix)
 
-        stage2_pjmats = proj_matrices.copy()
-        stage2_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 2
-        stage3_pjmats = proj_matrices.copy()
-        stage3_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 4
+        stage2_pjmats = proj_matrix.copy()
+        stage2_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 2
+        stage3_pjmats = proj_matrix.copy()
+        stage3_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 4
 
-        proj_matrices_ms = {
-            "stage1": proj_matrices,
+        proj_matrix_ms = {
+            "stage1": proj_matrix,
             "stage2": stage2_pjmats,
             "stage3": stage3_pjmats
         }
 
         return {"imgs": imgs,
-                "proj_matrices": proj_matrices_ms,
+                "proj_matrix": proj_matrix_ms,
                 "depth_values": depth_values,
                 "filename": scan + '/{}/' + '{:0>8}'.format(view_ids[0]) + "{}"}

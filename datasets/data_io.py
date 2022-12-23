@@ -1,9 +1,11 @@
 import numpy as np
 import re
 import sys
-
+import pdb
 
 def read_pfm(filename):
+    # filename = 'outputs/dtu_testing/scan1/depth_est/00000000.pfm'
+    
     file = open(filename, 'rb')
     color = None
     width = None
@@ -74,6 +76,7 @@ import random, cv2
 class RandomCrop(object):
     def __init__(self, CropSize=0.1):
         self.CropSize = CropSize
+        pdb.set_trace()
 
     def __call__(self, image, normal):
         h, w = normal.shape[:2]

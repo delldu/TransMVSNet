@@ -4,6 +4,7 @@ import os
 from PIL import Image
 from datasets.data_io import *
 from datasets.preprocess import *
+import pdb
 
 class MVSDataset(Dataset):
     def __init__(self, datapath, listfile, mode, nviews, ndepths=192, interval_scale=1.0,
@@ -24,6 +25,7 @@ class MVSDataset(Dataset):
 
         assert self.mode in ["train", "val", "test"]
         self.metas = self.build_list()
+        pdb.set_trace()
 
     def build_list(self):
         metas = []
@@ -45,6 +47,9 @@ class MVSDataset(Dataset):
                         continue
                     metas.append((scan, ref_view, src_views,))
         print("dataset", self.mode, "metas:", len(metas))
+
+        pdb.set_trace()
+
         return metas
 
     def __len__(self):
@@ -98,7 +103,7 @@ class MVSDataset(Dataset):
         mask = None
         depth = None
         depth_values = None
-        proj_matrices = []
+        proj_matrix = []
         for i, vid in enumerate(view_ids):
             # NOTE that the id in image file names is from 000000000
             img_filename = os.path.join(self.datapath,
@@ -118,7 +123,7 @@ class MVSDataset(Dataset):
             proj_mat[0, :4, :4] = extrinsics
             proj_mat[1, :3, :3] = intrinsics
 
-            proj_matrices.append(proj_mat)
+            proj_matrix.append(proj_mat)
 
             if i == 0:  # reference view
                 depth_values = np.arange(depth_min, depth_interval * (self.ndepths-0.5) + depth_min, depth_interval,
@@ -146,20 +151,20 @@ class MVSDataset(Dataset):
 
         imgs = np.stack(imgs).transpose([0, 3, 1, 2])
 
-        proj_matrices = np.stack(proj_matrices)
-        stage2_pjmats = proj_matrices.copy()
-        stage2_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 2
-        stage3_pjmats = proj_matrices.copy()
-        stage3_pjmats[:, 1, :2, :] = proj_matrices[:, 1, :2, :] * 4
+        proj_matrix = np.stack(proj_matrix)
+        stage2_pjmats = proj_matrix.copy()
+        stage2_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 2
+        stage3_pjmats = proj_matrix.copy()
+        stage3_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 4
 
-        proj_matrices_ms = {
-            "stage1": proj_matrices,
+        proj_matrix_ms = {
+            "stage1": proj_matrix,
             "stage2": stage2_pjmats,
             "stage3": stage3_pjmats
         }
 
         return {"imgs": imgs,
-                "proj_matrices": proj_matrices_ms,
+                "proj_matrix": proj_matrix_ms,
                 "depth": depth_ms,
                 "depth_values": depth_values, # generate depth index
                 "mask": mask_ms,

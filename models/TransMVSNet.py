@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .module import *
 from .FMT import FMT_with_pathway
+import pdb
 
 Align_Corners_Range = False
 
@@ -34,25 +35,25 @@ class DepthNet(nn.Module):
         super(DepthNet, self).__init__()
         self.pixel_wise_net = PixelwiseNet()
 
-    def forward(self, features, proj_matrices, depth_values, num_depth, cost_regularization, prob_volume_init=None, view_weights=None):
+    def forward(self, features, proj_matrix, depth_values, num_depth, cost_regularization, prob_volume_init=None, view_weights=None):
         """forward.
 
         :param stage_idx: int, index of stage, [1, 2, 3], stage_1 corresponds to lowest image resolution
         :param features: torch.Tensor, TODO: [B, C, H, W]
-        :param proj_matrices: torch.Tensor,
+        :param proj_matrix: torch.Tensor,
         :param depth_values: torch.Tensor, TODO: [B, D, H, W]
         :param num_depth: int, Ndepth
         :param cost_regularization: nn.Module, regularization network
         :param prob_volume_init:
         :param view_weights: pixel wise view weights for src views
         """
-        proj_matrices = torch.unbind(proj_matrices, 1)
-        assert len(features) == len(proj_matrices), "Different number of images and projection matrices"
+        proj_matrix = torch.unbind(proj_matrix, 1)
+        assert len(features) == len(proj_matrix), "Different number of images and projection matrices"
         assert depth_values.shape[1] == num_depth, "depth_values.shape[1]:{}  num_depth:{}".format(depth_values.shapep[1], num_depth)
 
         # step 1. feature extraction
         ref_feature, src_features = features[0], features[1:] # [B, C, H, W]
-        ref_proj, src_projs = proj_matrices[0], proj_matrices[1:] # [B, 2, 4, 4]
+        ref_proj, src_projs = proj_matrix[0], proj_matrix[1:] # [B, 2, 4, 4]
 
         # step 2. differentiable homograph, build cost volume
         if view_weights == None:
@@ -98,30 +99,25 @@ class DepthNet(nn.Module):
         depth = depth_wta(prob_volume, depth_values=depth_values)
 
         with torch.no_grad():
-            photometric_confidence = torch.max(prob_volume, dim=1)[0]
+            photo_confidence = torch.max(prob_volume, dim=1)[0]
         if view_weights == None:
             view_weights = torch.cat(view_weight_list, dim=1) # [B, Nview, H, W]
-            return {"depth": depth,  "photometric_confidence": photometric_confidence, "prob_volume": prob_volume, "depth_values": depth_values}, view_weights.detach()
+            return {"depth": depth,  "photo_confidence": photo_confidence, "prob_volume": prob_volume, "depth_values": depth_values}, view_weights.detach()
         else:
-            return {"depth": depth,  "photometric_confidence": photometric_confidence, "prob_volume": prob_volume, "depth_values": depth_values}
+            return {"depth": depth,  "photo_confidence": photo_confidence, "prob_volume": prob_volume, "depth_values": depth_values}
 
 
 class TransMVSNet(nn.Module):
-    def __init__(self, refine=False, ndepths=[48, 32, 8], depth_interals_ratio=[4, 2, 1], share_cr=False,
-            grad_method="detach", arch_mode="fpn", cr_base_chs=[8, 8, 8]):
+    def __init__(self, ndepths=[48, 32, 8], depth_interals_ratio=[4.0, 1.0, 0.5], cr_base_chs=[8, 8, 8]):
         super(TransMVSNet, self).__init__()
-        self.refine = refine
-        self.share_cr = share_cr
+        assert len(ndepths) == len(depth_interals_ratio)
+
         self.ndepths = ndepths
         self.depth_interals_ratio = depth_interals_ratio
-        self.grad_method = grad_method
-        self.arch_mode = arch_mode
         self.cr_base_chs = cr_base_chs
         self.num_stage = len(ndepths)
-        print("**********netphs:{}, depth_intervals_ratio:{},  grad:{}, chs:{}************".format(ndepths,
-            depth_interals_ratio, self.grad_method, self.cr_base_chs))
-
-        assert len(ndepths) == len(depth_interals_ratio)
+        print("**********netphs:{}, depth_intervals_ratio:{},  chs:{}************".format(ndepths,
+            depth_interals_ratio, self.cr_base_chs))
 
         self.stage_infos = {
                 "stage1":{
@@ -136,20 +132,12 @@ class TransMVSNet(nn.Module):
                 }
 
         self.feature = FeatureNet(base_channels=8)
-
         self.FMT_with_pathway = FMT_with_pathway()
-
-        if self.share_cr:
-            self.cost_regularization = CostRegNet(in_channels=1, base_channels=8)
-        else:
-            self.cost_regularization = nn.ModuleList([CostRegNet(in_channels=1, base_channels=self.cr_base_chs[i])
+        self.cost_regularization = nn.ModuleList([CostRegNet(in_channels=1, base_channels=self.cr_base_chs[i])
                 for i in range(self.num_stage)])
-        if self.refine:
-            self.refine_network = RefineNet()
-
         self.DepthNet = DepthNet()
 
-    def forward(self, imgs, proj_matrices, depth_values, test_tnt=False):
+    def forward(self, imgs, proj_matrix, depth_values, test_tnt=False):
         depth_min = float(depth_values[0, 0].cpu().numpy())
         depth_max = float(depth_values[0, -1].cpu().numpy())
         depth_interval = (depth_max - depth_min) / depth_values.size(1)
@@ -165,18 +153,13 @@ class TransMVSNet(nn.Module):
         outputs = {}
         depth, cur_depth = None, None
         view_weights = None
-        for stage_idx in range(self.num_stage):
+        for stage_idx in range(self.num_stage): # 3
             features_stage = [feat["stage{}".format(stage_idx + 1)] for feat in features]
-            proj_matrices_stage = proj_matrices["stage{}".format(stage_idx + 1)]
+            proj_matrices_stage = proj_matrix["stage{}".format(stage_idx + 1)]
             stage_scale = self.stage_infos["stage{}".format(stage_idx + 1)]["scale"]
 
-            Using_inverse_d = False
-
             if depth is not None:
-                if self.grad_method == "detach":
-                    cur_depth = depth.detach()
-                else:
-                    cur_depth = depth
+                cur_depth = depth.detach()
                 cur_depth = F.interpolate(cur_depth.unsqueeze(1),
                         [img.shape[2], img.shape[3]], mode='bilinear',
                         align_corners=Align_Corners_Range).squeeze(1)
@@ -192,7 +175,7 @@ class TransMVSNet(nn.Module):
                     shape=[img.shape[0], img.shape[2], img.shape[3]],
                     max_depth=depth_max,
                     min_depth=depth_min,
-                    use_inverse_depth=Using_inverse_d)
+                    use_inverse_depth=False)
 
             if stage_idx + 1 > 1: # for stage 2 and 3
                 view_weights = F.interpolate(view_weights, scale_factor=2, mode="nearest")
@@ -203,14 +186,14 @@ class TransMVSNet(nn.Module):
                         proj_matrices_stage,
                         depth_values=F.interpolate(depth_range_samples.unsqueeze(1), [self.ndepths[stage_idx], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)], mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
                         num_depth=self.ndepths[stage_idx],
-                        cost_regularization=self.cost_regularization if self.share_cr else self.cost_regularization[stage_idx], view_weights=view_weights)
+                        cost_regularization=self.cost_regularization[stage_idx], view_weights=view_weights)
             else:
                 outputs_stage = self.DepthNet(
                         features_stage,
                         proj_matrices_stage,
                         depth_values=F.interpolate(depth_range_samples.unsqueeze(1), [self.ndepths[stage_idx], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)], mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
                         num_depth=self.ndepths[stage_idx],
-                        cost_regularization=self.cost_regularization if self.share_cr else self.cost_regularization[stage_idx], view_weights=view_weights)
+                        cost_regularization=self.cost_regularization[stage_idx], view_weights=view_weights)
 
             wta_index_map = torch.argmax(outputs_stage['prob_volume'], dim=1, keepdim=True).type(torch.long)
             depth = torch.gather(outputs_stage['depth_values'], 1, wta_index_map).squeeze(1)
@@ -218,9 +201,5 @@ class TransMVSNet(nn.Module):
 
             outputs["stage{}".format(stage_idx + 1)] = outputs_stage
             outputs.update(outputs_stage)
-
-        if self.refine:
-            refined_depth = self.refine_network(torch.cat((imgs[:, 0], depth), 1))
-            outputs["refined_depth"] = refined_depth
 
         return outputs
