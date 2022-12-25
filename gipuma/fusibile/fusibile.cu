@@ -69,14 +69,13 @@ __device__ FORCEINLINE void project_on_camera (const float4 &X, const Camera_cu 
 __global__ void fusibile (GlobalState &gs, int ref_camera)
 {
     int2 p = make_int2 ( blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y );
-    //printf("p is %d %d\n", p.x, p.y);
 
     const int cols = gs.cameras->cols;
     const int rows = gs.cameras->rows;
 
-    if (p.x>=cols)
+    if (p.x >= cols)
         return;
-    if (p.y>=rows)
+    if (p.y >= rows)
         return;
 
     const int center = p.y*cols+p.x;
@@ -99,36 +98,23 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
 
     float4 X;
     get3Dpoint_cu (&X, camParams.cameras[ref_camera], p, depth);
-    //if (p.x<100 && p.y ==100)
-    //printf("3d Point is %f %f %f\n", X.x, X.y, X.z);
     float4 consistent_X = X;
     float4 consistent_normal  = normal;
     float4 consistent_texture4 = tex2D<float4> (gs.imgs[ref_camera], p.x+0.5f, p.y+0.5f);
     int number_consistent = 0;
-    //int2 used_list[camParams.viewSelectionSubsetNumber];
-    int2 used_list[MAX_IMAGES];
+
     for ( int i = 0; i < camParams.viewSelectionSubsetNumber; i++ ) {
 
         int idxCurr = camParams.viewSelectionSubset[i];
-        used_list[idxCurr].x=-1;
-        used_list[idxCurr].y=-1;
         if (idxCurr == ref_camera)
             continue;
 
         // Project 3d point X on camera idxCurr
         float2 tmp_pt;
         project_on_camera (X, camParams.cameras[idxCurr], &tmp_pt, &depth);
-        //printf("P for camera %d is \n", i);
-        //print_matrix (camParams.cameras[idxCurr].P, "camera ");
-        //printf("2d point for camera %d is %f %f\n", idxCurr, tmp_pt.x, tmp_pt.y);
 
         // Boundary check
-        if (tmp_pt.x >=0 &&
-            tmp_pt.x < cols &&
-            tmp_pt.y >=0 &&
-            tmp_pt.y < rows) {
-            //printf("Boundary check passed\n");
-
+        if (tmp_pt.x >=0 && tmp_pt.x < cols && tmp_pt.y >=0 && tmp_pt.y < rows) {
             // Compute interpolated depth and normal for tmp_pt w.r.t. camera ref_camera
             float4 tmp_normal_and_depth; // first 3 components normal, fourth depth
             tmp_normal_and_depth   = tex2D<float4> (gs.normals_depths[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
@@ -144,29 +130,15 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
             
             // First consistency check on depth
             if (fabsf(depth_disp - tmp_normal_and_depth_disp) < gs.params->depthThresh) {
-                //printf("\tFirst consistency test passed!\n");
                 float angle = getAngle_cu (tmp_normal_and_depth, normal); // extract normal
-                if (angle < gs.params->normalThresh)
-                {
-                    //printf("\tSecond consistency test passed!\n");
-                    /// All conditions met:
-                    //  - average 3d points and normals
-                    //  - save resulting point and normal
-                    //  - (optional) average texture (not done yet)
+                if (angle < gs.params->normalThresh) {
                     float4 tmp_X; // 3d point of consistent point on other view
                     int2 tmp_p = make_int2 ((int) tmp_pt.x, (int) tmp_pt.y);
 
                     get3Dpoint_cu (&tmp_X, camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w);
                     consistent_X      = consistent_X      + tmp_X;
-                    //consistent_X      = tmp_X;
                     consistent_normal = consistent_normal + tmp_normal_and_depth;
-                    if (1) // gs.params->saveTexture)
-                        consistent_texture4 = consistent_texture4 + tex2D<float4> (gs.imgs[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
-
-                    // Save the point for later check
-                    //printf ("Saved point on camera %d is %d %d\n", idxCurr, (int)tmp_pt.x, (int)tmp_pt.y);
-                    used_list[idxCurr].x=(int)tmp_pt.x;
-                    used_list[idxCurr].y=(int)tmp_pt.y;
+                    consistent_texture4 = consistent_texture4 + tex2D<float4> (gs.imgs[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
                     number_consistent++;
                 }
@@ -175,22 +147,17 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     }
 
     // Average normals and points
-    consistent_X       = consistent_X       / ((float) number_consistent + 1.0f);
-    consistent_normal  = consistent_normal  / ((float) number_consistent + 1.0f);
+    consistent_X = consistent_X / ((float) number_consistent + 1.0f);
+    consistent_normal = consistent_normal / ((float) number_consistent + 1.0f);
     consistent_texture4 = consistent_texture4 / ((float) number_consistent + 1.0f);
 
-    // If at least numConsistentThresh point agree:
-    // Create point
-    // Save normal
-    // (optional) save texture
     if (number_consistent >= gs.params->numConsistentThresh) {
         gs.pc->points[center].coord  = consistent_X;
         gs.pc->points[center].normal = consistent_normal;
         gs.pc->points[center].texture4 = consistent_texture4;
     }
-
-    return;
 }
+
 /* Copy point cloud to global memory */
 //template< typename T >
 void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
@@ -242,8 +209,6 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     printf("Run gipuma\n");
-    /*curandState* devStates;*/
-    //cudaMalloc ( &gs.cs, rows*cols*sizeof( curandState ) );
 
     int count = 0;
     int i = 0;
@@ -269,12 +234,6 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
 
     cudaSetDevice(i);
     cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*128);
-    dim3 grid_size;
-    grid_size.x=(cols+BLOCK_W-1)/BLOCK_W;
-    grid_size.y=((rows/2)+BLOCK_H-1)/BLOCK_H;
-    dim3 block_size;
-    block_size.x=BLOCK_W;
-    block_size.y=BLOCK_H;
 
     dim3 grid_size_initrand;
     grid_size_initrand.x=(cols+32-1)/32;
@@ -295,8 +254,6 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     printf("Fusing points\n");
     cudaEventRecord(start);
 
-    //printf("Computing final disparity\n");
-    //for (int cam=0; cam<10; cam++) {
     for (int cam=0; cam<num_views; cam++) {
         fusibile<<< grid_size_initrand, block_size_initrand, cam>>>(gs, cam);
         cudaDeviceSynchronize();
@@ -315,8 +272,6 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
         printf("Error: %s\n", cudaGetErrorString(err));
-
-    // print results to file
 }
 
 int runcuda(GlobalState &gs, PointCloudList &pc_list, int num_views)

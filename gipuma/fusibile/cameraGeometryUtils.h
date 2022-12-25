@@ -46,25 +46,6 @@ Mat_<float> getCameraCenter ( Mat_<float> &P ) {
     return C;
 }
 
-#if 0
-inline Vec3f get3Dpoint ( Camera &cam, float x, float y, float depth ) {
-    // in case camera matrix is not normalized: see page 162, then depth might not be the real depth but w and depth needs to be computed from that first
-
-    Mat_<float> pt = Mat::ones ( 3,1,CV_32F );
-    pt ( 0,0 ) = x;
-    pt ( 1,0 ) = y;
-
-    //formula taken from page 162 (alternative expression)
-    Mat_<float> ptX = cam.M_inv * ( depth*pt - cam.P.col ( 3 ) );
-    return Vec3f ( ptX ( 0 ),ptX ( 1 ),ptX ( 2 ) );
-}
-
-inline Vec3f get3Dpoint ( Camera &cam, int x, int y, float depth ){
-    return get3Dpoint(cam,(float)x,(float)y,depth);
-}
-#endif
-
-
 Mat_<float> getTransformationMatrix ( Mat_<float> R, Mat_<float> t ) {
     Mat_<float> transMat = Mat::eye ( 4,4, CV_32F );
     //Mat_<float> Rt = - R * t;
@@ -73,28 +54,6 @@ Mat_<float> getTransformationMatrix ( Mat_<float> R, Mat_<float> t ) {
 
     return transMat;
 }
-
-/* compute depth value from disparity or disparity value from depth
- * Input:  f         - focal length in pixel
- *         baseline  - baseline between cameras (in meters)
- *         d - either disparity or depth value
- * Output: either depth or disparity value
- */
-#if 0
-float disparityDepthConversion ( float f, float baseline, float d ) {
-    /*if ( d == 0 )*/
-        /*return FLT_MAX;*/
-    return f * baseline / d;
-}
-
-Mat_<float> getTransformationReferenceToOrigin ( Mat_<float> R,Mat_<float> t ) {
-    // create rotation translation matrix
-    Mat_<float> transMat_original = getTransformationMatrix ( R,t );
-
-    // get transformation matrix for [R1|t1] = [I|0]
-    return transMat_original.inv ();
-}
-#endif
 
 void transformCamera ( Mat_<float> R,Mat_<float> t, Mat_<float> transform, Camera &cam, Mat_<float> K ) {
     // create rotation translation matrix
@@ -108,11 +67,11 @@ void transformCamera ( Mat_<float> R,Mat_<float> t, Mat_<float> transform, Camer
     // set R and t
     cam.R = transMat_t ( Range ( 0,3 ),Range ( 0,3 ) );
     cam.t = transMat_t ( Range ( 0,3 ),Range ( 3,4 ) );
+
     // set camera center C
     Mat_<float> C = getCameraCenter ( cam.P );
-
     C = C / C ( 3,0 );
-    cam.C = Vec3f ( C ( 0,0 ),C ( 1,0 ),C ( 2,0 ) );
+    cam.C3 = Vec3f ( C ( 0,0 ),C ( 1,0 ),C ( 2,0 ) );
 }
 
 Mat_<float> scaleK ( Mat_<float> K, float scaleFactor ) {
@@ -120,6 +79,7 @@ Mat_<float> scaleK ( Mat_<float> K, float scaleFactor ) {
     //scale focal length
     K_scaled ( 0,0 ) = K ( 0,0 ) / scaleFactor;
     K_scaled ( 1,1 ) = K ( 1,1 ) / scaleFactor;
+
     //scale center point
     K_scaled ( 0,2 ) = K ( 0,2 ) / scaleFactor;
     K_scaled ( 1,2 ) = K ( 1,2 ) / scaleFactor;
@@ -149,7 +109,7 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
  *         scaleFactor - if image was rescaled we need to adapt calibration matrix K accordingly
  * Output: camera parameters
  */
-CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inputFiles, float depthMin, float depthMax) {
+CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inputFiles) {
     float scaleFactor = 1.0f;
 
     CameraParameters params;
@@ -172,14 +132,11 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
         for ( size_t i = 0; i < numCameras; i++ ) {
             readPFileStrechaPmvs ( inputFiles.p_folder + inputFiles.img_filenames[i] + ".P",params.cameras[i].P );
             unsigned found = inputFiles.img_filenames[i].find_last_of ( "." );
-            //params.cameras[i].id = atoi ( inputFiles.img_filenames[i].substr ( 0,found ).c_str () );
             params.cameras[i].id = inputFiles.img_filenames[i].substr ( 0,found ).c_str ();
-            /*params.cameras[i].P = KMaros * params.cameras[i].P;*/
         }
 
     }
     cout << "numCameras is " << numCameras << endl;
-
 
     // decompose projection matrices into K, R and t
     vector<Mat_<float> > K ( numCameras );
@@ -201,73 +158,35 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     //computeTranslatedProjectionMatrices(R1, R2, t1, t2, params);
     Mat_<float> transform = Mat::eye ( 4,4,CV_32F );
 
-    /*cout << "transform is " << transform << endl;*/
-    params.cameras[0].reference = true;
-    params.idRef = 0;
-
     //assuming K is the same for all cameras
     params.K = scaleK ( K[0],scaleFactor );
-    params.K_inv = params.K.inv ();
+
     // get focal length from calibration matrix
     params.f = params.K ( 0,0 );
 
     for ( size_t i = 0; i < numCameras; i++ ) {
         params.cameras[i].K = scaleK(K[i],scaleFactor);
-        params.cameras[i].K_inv = params.cameras[i].K.inv ( );
-        //params.cameras[i].f = params.cameras[i].K(0,0);
 
+        transformCamera ( R[i],t[i], transform, params.cameras[i],params.K );
 
-        params.cameras[i].depthMin = depthMin;
-        params.cameras[i].depthMax = depthMax;
-        transformCamera ( R[i],t[i], transform,    params.cameras[i],params.K );
-
-        params.cameras[i].P_inv = params.cameras[i].P.inv ( DECOMP_SVD );
         params.cameras[i].M_inv = params.cameras[i].P.colRange ( 0,3 ).inv ();
 
-        // set camera baseline (if unknown we need to guess something)
-        //float b = (float)norm(t1,t2,NORM_L2);
-        params.cameras[i].baseline = 0.54f; //0.54 = Kitti baseline
-
         // K
-        Mat_<float> tmpK = params.K.t ();
-        //copyOpencvMatToFloatArray ( params.K, &cpc.K);
-        //copyOpencvMatToFloatArray ( params.K_inv, &cpc.K_inv);
         copyOpencvMatToFloatArray ( params.cameras[i].K, &cpc.cameras[i].K);
-        copyOpencvMatToFloatArray ( params.cameras[i].K_inv, &cpc.cameras[i].K_inv);
-        cpc.cameras[i].fy = params.K(1,1);
-        cpc.f = params.K(0,0);
         cpc.cameras[i].f = params.K(0,0);
-        cpc.cameras[i].fx = params.K(0,0);
-        cpc.cameras[i].fy = params.K(1,1);
-        cpc.cameras[i].depthMin = params.cameras[i].depthMin;
-        cpc.cameras[i].depthMax = params.cameras[i].depthMax;
-        cpc.cameras[i].baseline = params.cameras[i].baseline;
-        cpc.cameras[i].reference = params.cameras[i].reference;
 
-        cpc.cameras[i].alpha = params.K ( 0,0 )/params.K(1,1);
         // Copy data to cuda structure
-        copyOpencvMatToFloatArray ( params.cameras[i].P,     &cpc.cameras[i].P);
-        copyOpencvMatToFloatArray ( params.cameras[i].P_inv, &cpc.cameras[i].P_inv);
+        copyOpencvMatToFloatArray ( params.cameras[i].P, &cpc.cameras[i].P);
         copyOpencvMatToFloatArray ( params.cameras[i].M_inv, &cpc.cameras[i].M_inv);
-        //copyOpencvMatToFloatArray ( params.K,                &cpc.cameras[i].K);
-        //copyOpencvMatToFloatArray ( params.K_inv,            &cpc.cameras[i].K_inv);
-        copyOpencvMatToFloatArray ( params.cameras[i].K,                &cpc.cameras[i].K);
-        copyOpencvMatToFloatArray ( params.cameras[i].K_inv,            &cpc.cameras[i].K_inv);
+        copyOpencvMatToFloatArray ( params.cameras[i].K, &cpc.cameras[i].K);
         copyOpencvMatToFloatArray ( params.cameras[i].R,     &cpc.cameras[i].R);
-        /*copyOpencvMatToFloatArray ( params.cameras[i].t, &cpc.cameras[i].t);*/
-        copyOpencvVecToFloat4 ( params.cameras[i].C,         &cpc.cameras[i].C4);
-        cpc.cameras[i].t4.x = params.cameras[i].t(0);
-        cpc.cameras[i].t4.y = params.cameras[i].t(1);
-        cpc.cameras[i].t4.z = params.cameras[i].t(2);
+        copyOpencvVecToFloat4 ( params.cameras[i].C3,         &cpc.cameras[i].C4);
+
         Mat_<float> tmp = params.cameras[i].P.col(3);
         cpc.cameras[i].P_col34.x = tmp(0,0);
         cpc.cameras[i].P_col34.y = tmp(1,0);
         cpc.cameras[i].P_col34.z = tmp(2,0);
-
-        Mat_<float> tmpKinv = params.K_inv.t ();
-
     }
-        //exit(1);
 
     return params;
 }

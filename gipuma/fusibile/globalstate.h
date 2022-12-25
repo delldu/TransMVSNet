@@ -26,21 +26,21 @@ public:
     CameraParameters_cu *cameras;
     //ImageInfo iminfo;
     LineState *lines;
-    curandState *cs;
+
+    // curandState *cs;
     AlgorithmParameters *params;
     PointCloud *pc;
-   // PointCloud *pc_list;
 
     cudaTextureObject_t imgs  [MAX_IMAGES];
     cudaTextureObject_t normals_depths  [MAX_IMAGES]; // first 3 values normal, fourth depth
+
     void resize(int n)
     {
         printf("Resizing globalstate to %d\n", n);
         cudaMallocManaged (&lines,     sizeof(LineState) * n);
     }
-    ~GlobalState()
-    {
-        /*cudaFree (c);*/
+
+    ~GlobalState() {
         cudaFree (lines);
     }
 

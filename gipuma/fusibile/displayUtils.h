@@ -38,7 +38,7 @@ static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc)
 #pragma omp parallel for
     for(size_t i = 0; i < pc.size; i++) {
         const Point_li &p = pc.points[i];
-//        const float4 normal = p.normal;
+
         float4 X = p.coord;
         const char color_r = (int)p.texture4[2];
         const char color_g = (int)p.texture4[1];

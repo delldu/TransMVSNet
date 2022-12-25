@@ -26,33 +26,22 @@ struct InputFiles {
 
 
 struct Camera {
-    Camera () : baseline ( 0.54f ), P ( Mat::eye ( 3,4,CV_32F ) ), R ( Mat::eye ( 3,3,CV_32F ) ), reference ( false ), depthMin ( 2.0f ), depthMax ( 20.0f ) {}
-    float baseline;
+    Camera () : P ( Mat::eye ( 3,4,CV_32F ) ), R ( Mat::eye ( 3,3,CV_32F ) ) {}
+
     Mat_<float> P;
-    Mat_<float> P_inv;
     Mat_<float> M_inv;
-    //Mat_<float> K;
     Mat_<float> R;
     Mat_<float> t;
-    Vec3f C;
-    bool reference;
-    float depthMin; //this could be figured out from the bounding volume (not done right now, but that's why this parameter is here as well and not only in AlgorithmParameters)
-    float depthMax; //this could be figured out from the bounding volume (not done right now, but that's why this parameter is here as well and not only in AlgorithmParameters)
-    //int id; //corresponds to the image name id (eg. 0-10), independent of order in argument list, just dependent on name
+    Vec3f C3; // Camera Center (x, y, z)
     string id;
     Mat_<float> K;
-    Mat_<float> K_inv;
-    //float f;
 };
 
 //parameters for camera geometry setup (assuming that K1 = K2 = K, P1 = K [I | 0] and P2 = K [R | t])
 struct CameraParameters {
-    CameraParameters () : rectified ( false ), idRef ( 0 ) {}
+    CameraParameters () {}
     Mat_<float> K; //if K varies from camera to camera: K and f need to be stored within Camera
-    Mat_<float> K_inv; //if K varies from camera to camera: K and f need to be stored within Camera
     float f;
-    bool rectified;
     vector<Camera> cameras;
-    int idRef;
     vector<int> viewSelectionSubset;
 };

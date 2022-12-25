@@ -4,9 +4,6 @@
 
 class AlgorithmParameters : public Managed{
 public:
-    float depthMin; // CUDA
-    float depthMax; // CUDA
-
     //threshold for consistency check
     float depthThresh;
     float normalThresh ;
