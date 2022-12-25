@@ -84,13 +84,6 @@ static float getD ( Vec3f &normal, int x0, int y0, float depth, Camera &cam ) {
     {
         pt = get3Dpoint ( cam, (float)x0, (float)y0, depth );
     }
-    /* XXX WTF ?
-    float d = getPlaneDistance ( normal,pt );
-    if ( d != d ) {
-        d = FLT_MAX;
-    }
-    return d;
-    */
     return getPlaneDistance ( normal,pt );
 }
 
@@ -143,17 +136,6 @@ void transformCamera ( Mat_<float> R,Mat_<float> t, Mat_<float> transform, Camer
 }
 
 Mat_<float> scaleK ( Mat_<float> K, float scaleFactor ) {
-    //compute focal length in mm (for APS-C sensor)
-    //float imgwidth_original = 3072.f;
-    //float imgheight_original = 2048.f;
-    //float ccdWidth = 22.7f;
-    //float ccdHeight = 15.1f;
-    //float f_mm = alpha_x * ccdWidth / imgwidth_original;
-    //float f_mm2 = alpha_y * ccdHeight / imgheight_original;
-    //alpha_x = f_mm / (ccdWidth / (imgwidth_original/scaleFactor));
-    //alpha_y = f_mm2 / (ccdHeight / (imgheight_original/scaleFactor));
-    //cout << "focal length: " << f_mm << "/" << f_mm2 << " , " << alpha_x << "/" << alpha_y << endl;
-
     Mat_<float> K_scaled = K.clone();
     //scale focal length
     K_scaled ( 0,0 ) = K ( 0,0 ) / scaleFactor;
@@ -164,18 +146,14 @@ Mat_<float> scaleK ( Mat_<float> K, float scaleFactor ) {
 
     return K_scaled;
 }
+
 void copyOpencvVecToFloat4 ( Vec3f &v, float4 *a)
 {
     a->x = v(0);
     a->y = v(1);
     a->z = v(2);
 }
-void copyOpencvVecToFloatArray ( Vec3f &v, float *a)
-{
-    a[0] = v(0);
-    a[1] = v(1);
-    a[2] = v(2);
-}
+
 void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
 {
 
@@ -199,83 +177,12 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     //get projection matrices
 
     //load projection matrix from file (e.g. for Kitti)
-    if ( !inputFiles.calib_filename.empty () ) {
-        //two view case
-        readCalibFileKitti ( inputFiles.calib_filename,params.cameras[0].P,params.cameras[1].P );
-        params.rectified = false; // for Kitti data is actually rectified, set this to true for computation in disparity space
-
-        /*
-        //four view case
-        numCameras = 4;
-        params.cameras.resize ( numCameras );
-        readCalibFileKitti ( inputFiles.calib_filename,params.cameras[0].P,params.cameras[1].P );
-        params.rectified = false; // for Kitti data is actually rectified, set this to true for computation in disparity space
-
-        Mat_<float> Rt_110 = Mat::eye ( 4, 4, CV_32F );
-        //110
-        // 0.9999    0.0043    0.0118    0.0008
-        //-0.0044    1.0000    0.0027    0.0008
-        //-0.0118   -0.0028    0.9999   -0.6181
-        Rt_110(0,0) = 0.9999f;
-        Rt_110(0,1) = 0.0043f;
-        Rt_110(0,2) = 0.0118f;
-        Rt_110(0,3) = 0.0008f;
-        Rt_110(1,0) = -0.0044f;
-        Rt_110(1,1) = 1.0000f;
-        Rt_110(1,2) = 0.0027f;
-        Rt_110(1,3) = 0.0008f;
-        Rt_110(2,0) = -0.0118f;
-        Rt_110(2,1) = -0.0028f;
-        Rt_110(2,2) = 0.9999f;
-        Rt_110(2,3) =-0.6181f;
-
-        params.cameras[2].P = params.cameras[0].P.clone();
-        params.cameras[3].P = params.cameras[1].P.clone();
-
-        Mat_<float> K,R,T,C,t;
-        //left camera
-        decomposeProjectionMatrix ( params.cameras[2].P,K,R,T);
-        // get 3-dimensional translation vectors and camera center (divide by augmented component)
-        C = T ( Range ( 0,3 ),Range ( 0,1 ) ) / T ( 3,0 );
-        t = -R * C;
-        transformCamera ( R,t,Rt_110,params.cameras[2],K );
-
-        //right camera
-        decomposeProjectionMatrix ( params.cameras[3].P,K,R,T);
-        // get 3-dimensional translation vectors and camera center (divide by augmented component)
-        C = T ( Range ( 0,3 ),Range ( 0,1 ) ) / T ( 3,0 );
-        t = -R * C;
-        transformCamera ( R,t,Rt_110,params.cameras[3],K );
-
-
-        cout << params.cameras[0].P <<endl;
-        cout << params.cameras[1].P <<endl;
-        cout << params.cameras[2].P <<endl;
-        cout << params.cameras[3].P <<endl;
-        */
-    }
     Mat_<float> KMaros = Mat::eye ( 3, 3, CV_32F );
     KMaros(0,0) = 8066.0;
     KMaros(1,1) = 8066.0;
     KMaros(0,2) = 2807.5;
     KMaros(1,2) = 1871.5;
 
-    // Load pmvs files
-    if ( !inputFiles.pmvs_folder.empty () ) {
-        numCameras = inputFiles.img_filenames.size ();
-        params.cameras.resize ( numCameras );
-        for ( size_t i = 0; i < numCameras; i++ ) {
-            int lastindex = inputFiles.img_filenames[i].find_last_of(".");
-            string filename_without_extension = inputFiles.img_filenames[i].substr(0, lastindex);
-            readPFileStrechaPmvs ( inputFiles.p_folder + filename_without_extension + ".txt",params.cameras[i].P );
-            unsigned found = inputFiles.img_filenames[i].find_last_of ( "." );
-            //params.cameras[i].id = atoi ( inputFiles.img_filenames[i].substr ( 0,found ).c_str () );
-            params.cameras[i].id = inputFiles.img_filenames[i].substr ( 0,found ).c_str ();
-            // params.cameras[i].P = KMaros * params.cameras[i].P;
-            //cout << params.cameras[i].P << endl;
-
-        }
-    }
     //load projection matrix from file (e.g. for Strecha)
     cout << "P folder is " << inputFiles.p_folder << endl;
     if ( !inputFiles.p_folder.empty () ) {
@@ -290,20 +197,6 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
         }
 
     }
-    //load projection matrix from file (e.g. for Middlebury)
-    if ( !inputFiles.krt_file.empty () ) {
-        numCameras = inputFiles.img_filenames.size ();
-        params.cameras.resize ( numCameras );
-        /*cout << "Num Cameras " << numCameras << endl;*/
-        readKRtFileMiddlebury ( inputFiles.krt_file, params.cameras, inputFiles);
-        for ( size_t i = 0; i < numCameras; i++ ) {
-            unsigned found = inputFiles.img_filenames[i].find_last_of ( "." );
-            params.cameras[i].id = inputFiles.img_filenames[i].substr ( 0,found ).c_str ();
-        }
-    }
-
-    /*cout << "KMaros is" << endl;*/
-    /*cout << KMaros << endl;*/
     cout << "numCameras is " << numCameras << endl;
 
 
@@ -318,16 +211,9 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     for ( size_t i = 0; i < numCameras; i++ ) {
         decomposeProjectionMatrix ( params.cameras[i].P,K[i],R[i],T[i] );
 
-        /*cout << "K: " << K[i] << endl;*/
-        /*cout << "R: " << R[i] << endl;*/
-        /*cout << "T: " << T[i] << endl;*/
-
         // get 3-dimensional translation vectors and camera center (divide by augmented component)
         C[i] = T[i] ( Range ( 0,3 ),Range ( 0,1 ) ) / T[i] ( 3,0 );
         t[i] = -R[i] * C[i];
-
-        /*cout << "C: " << C[i] << endl;*/
-        /*cout << "t: " << t[i] << endl;*/
     }
 
     // transform projection matrices (R and t part) so that P1 = K [I | 0]
@@ -339,10 +225,6 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     /*cout << "transform is " << transform << endl;*/
     params.cameras[0].reference = true;
     params.idRef = 0;
-    //cout << "K before scale is" << endl;
-    //cout << K[0] << endl;
-    /*K[0](0,1)=0;*/
-    /*K[0](2,2)=1;*/
 
     //assuming K is the same for all cameras
     params.K = scaleK ( K[0],scaleFactor );
@@ -358,29 +240,6 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
 
         params.cameras[i].depthMin = depthMin;
         params.cameras[i].depthMax = depthMax;
-
-        if ( !inputFiles.bounding_folder.empty () ) {
-            Vec3f ptBL, ptTR;
-            readBoundingVolume ( inputFiles.bounding_folder + inputFiles.img_filenames[i] + ".bounding",ptBL,ptTR );
-
-            //cout << "d1: " << getDepth ( ptBL,params.cameras[i].P ) <<endl;
-            //cout << "d2: " << getDepth ( ptTR,params.cameras[i].P ) <<endl;
-            /*
-            cout << "bounding volume: "<< ptBL << " / " << ptTR << endl;
-            Mat_<float> blMat = Mat::zeros(4,1,CV_32F);
-            blMat(0,0) = ptBL(0);
-            blMat(1,0) = ptBL(1);
-            blMat(2,0) = ptBL(2);
-            cout << "transformed BL: " << transform * blMat << endl;
-
-            Mat_<float> trMat = Mat::zeros(4,1,CV_32F);
-            trMat(0,0) = ptTR(0);
-            trMat(1,0) = ptTR(1);
-            trMat(2,0) = ptTR(2);
-            cout << "transformed TR: " << transform * trMat << endl;
-            */
-        }
-
         transformCamera ( R[i],t[i], transform,    params.cameras[i],params.K );
 
         params.cameras[i].P_inv = params.cameras[i].P.inv ( DECOMP_SVD );
@@ -406,14 +265,6 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
         cpc.cameras[i].baseline = params.cameras[i].baseline;
         cpc.cameras[i].reference = params.cameras[i].reference;
 
-        /*printf("MATRIXXX\n");*/
-        /*for (int pj=0; pj<3 ; pj++) {*/
-            /*for (int pi=0; pi<3 ; pi++)*/
-                /*cout << cpc.K[pi+pj*3] << " ";*/
-            /*cout << endl;*/
-        /*}*/
-
-        /*params.cameras[i].alpha = params.K ( 0,0 )/params.K(1,1);*/
         cpc.cameras[i].alpha = params.K ( 0,0 )/params.K(1,1);
         // Copy data to cuda structure
         copyOpencvMatToFloatArray ( params.cameras[i].P,     &cpc.cameras[i].P);
@@ -425,68 +276,17 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
         copyOpencvMatToFloatArray ( params.cameras[i].K_inv,            &cpc.cameras[i].K_inv);
         copyOpencvMatToFloatArray ( params.cameras[i].R,     &cpc.cameras[i].R);
         /*copyOpencvMatToFloatArray ( params.cameras[i].t, &cpc.cameras[i].t);*/
-        /*copyOpencvVecToFloatArray ( params.cameras[i].C, cpc.cameras[i].C);*/
         copyOpencvVecToFloat4 ( params.cameras[i].C,         &cpc.cameras[i].C4);
         cpc.cameras[i].t4.x = params.cameras[i].t(0);
         cpc.cameras[i].t4.y = params.cameras[i].t(1);
         cpc.cameras[i].t4.z = params.cameras[i].t(2);
         Mat_<float> tmp = params.cameras[i].P.col(3);
-        /*cpc.cameras[i].P_col3[0] = tmp(0,0);*/
-        /*cpc.cameras[i].P_col3[1] = tmp(1,0);*/
-        /*cpc.cameras[i].P_col3[2] = tmp(2,0);*/
         cpc.cameras[i].P_col34.x = tmp(0,0);
         cpc.cameras[i].P_col34.y = tmp(1,0);
         cpc.cameras[i].P_col34.z = tmp(2,0);
 
-        /*cout << "K for " << i << " is " << endl;*/
-        /*for (int pj=0; pj<3 ; pj++) {*/
-            /*for (int pi=0; pi<3 ; pi++)*/
-                /*cout << cpc.K[pi+pj*3] << " ";*/
-            /*cout << endl;*/
-        /*}*/
-        /*cout << "P for " << i << " is " << endl;*/
-        /*for (int pj=0; pj<3 ; pj++) {*/
-            /*for (int pi=0; pi<4 ; pi++)*/
-                /*cout << cpc.cameras[i].P[pi+pj*4] << " ";*/
-            /*cout << endl;*/
-        /*}*/
-        /*cout << "R for " << i << " is " << endl;*/
-        /*for (int pj=0; pj<3 ; pj++) {*/
-            /*for (int pi=0; pi<3 ; pi++)*/
-                /*cout << cpc.cameras[i].R[pi+pj*3] << " ";*/
-            /*cout << endl;*/
-        /*}*/
-        /*cout << "t for " << i << " is " << endl;*/
-        /*printf("%f %f %f\n", */
-               /*cpc.cameras[i].t4.x,*/
-               /*cpc.cameras[i].t4.y,*/
-               /*cpc.cameras[i].t4.z);*/
-        /*cout << endl;*/
-
-
         Mat_<float> tmpKinv = params.K_inv.t ();
 
-        /*cout << "Camera " << i << endl;*/
-        /*cout << "P " << endl;*/
-        /*cout << params.cameras[i].P_A << endl;*/
-        /*cout << params.cameras[i].P << endl;*/
-
-        /*cout << "K " << endl;*/
-        /*cout << params.K_A << endl;*/
-        /*cout << params.K << endl;*/
-
-        /*cout << "R " << endl;*/
-        /*cout << params.cameras[i].R_A << endl;*/
-        /*cout << params.cameras[i].R << endl;*/
-
-        /*cout << "t " << endl;*/
-        /*cout << params.cameras[i].t_A << endl;*/
-        /*cout << params.cameras[i].t << endl;*/
-
-        /*cout << "C " << endl;*/
-        /*cout << params.cameras[i].C_A << endl;*/
-        /*cout << params.cameras[i].C << endl;*/
-        /*cout << endl;*/
     }
         //exit(1);
 

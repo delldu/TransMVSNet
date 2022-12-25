@@ -226,8 +226,6 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
                     if (gs.params->saveTexture)
                         consistent_texture4 = consistent_texture4 + tex2D<float4> (gs.imgs[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
-
-
                     // Save the point for later check
                     //printf ("Saved point on camera %d is %d %d\n", idxCurr, (int)tmp_pt.x, (int)tmp_pt.y);
                     used_list[idxCurr].x=(int)tmp_pt.x;
@@ -261,15 +259,6 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
             if (gs.params->saveTexture)
                 gs.pc->points[center].texture4 = consistent_texture4;
 #endif
-
-//            //// Mark corresponding point on other views as "used"
-//            for ( int i = 0; i < camParams.viewSelectionSubsetNumber; i++ ) {
-//                int idxCurr = camParams.viewSelectionSubset[i];
-//                if (used_list[idxCurr].x==-1)
-//                    continue;
-//                //printf("Used list point on camera %d is %d %d\n", idxCurr, used_list[idxCurr].x, used_list[idxCurr].y);
-//                gs.lines[idxCurr].used_pixels [used_list[idxCurr].x + used_list[idxCurr].y*cols] = 1;
-//            }
         }
     }
 
@@ -356,17 +345,7 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
         fprintf(stderr, "There is no device supporting CUDA.\n");
         return ;
     }
-    //float mind = gs.params.min_disparity;
-    //float maxd = gs.params.max_disparity;
-    //srand(0);
-    //for(int x = 0; x < gs.cameras.cols; x++) {
-    //for(int y = 0; y < gs.cameras.rows; y++) {
-    //gs.lines.disp[y*gs.cameras.cols+x] = (float)rand()/(float)RAND_MAX * (maxd-mind) + mind;
-    //[>printf("%f\n", gs.lines.disp[y*256+x]);<]
-    //}
-    //}
-    /*printf("MAX DISP is %f\n", gs.params.max_disparity);*/
-    /*printf("MIN DISP is %f\n", gs.params.min_disparity);*/
+
     cudaSetDevice(i);
     cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*128);
     dim3 grid_size;
@@ -383,33 +362,13 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     block_size_initrand.x=32;
     block_size_initrand.y=32;
 
-/*     printf("Launching kernel with grid of size %d %d and block of size %d %d and shared size %d %d\nBlock %d %d and radius %d %d and tile %d %d\n",
-           grid_size.x,
-           grid_size.y,
-           block_size.x,
-           block_size.y,
-           SHARED_SIZE_W,
-           SHARED_SIZE_H,
-           BLOCK_W,
-           BLOCK_H,
-           WIN_RADIUS_W,
-           WIN_RADIUS_H,
-           TILE_W,
-           TILE_H
-          );
- */    printf("Grid size initrand is grid: %d-%d block: %d-%d\n", grid_size_initrand.x, grid_size_initrand.y, block_size_initrand.x, block_size_initrand.y);
+    printf("Grid size initrand is grid: %d-%d block: %d-%d\n", grid_size_initrand.x, grid_size_initrand.y, block_size_initrand.x, block_size_initrand.y);
 
     size_t avail;
     size_t total;
     cudaMemGetInfo( &avail, &total );
     size_t used = total - avail;
     printf("Device memory used: %fMB\n", used/1000000.0f);
-    printf("Number of iterations is %d\n", gs.params->iterations);
-    printf("Blocksize is %dx%d\n", gs.params->box_hsize,gs.params->box_vsize);
-    printf("Disparity threshold is \t%f\n", gs.params->depthThresh);
-    printf("Normal threshold is \t%f\n", gs.params->normalThresh);
-    printf("Number of consistent points is \t%d\n", gs.params->numConsistentThresh);
-    printf("Cam scale is \t%f\n", gs.params->cam_scale);
 
     //int shared_memory_size = sizeof(float)  * SHARED_SIZE ;
     printf("Fusing points\n");

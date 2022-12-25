@@ -41,32 +41,6 @@ static int read3Dpoint(char* line, Vec3f &pt){
     return 0;
 }
 
-static void readCalibFileKitti(const string calib_filename, Mat_<float> &P1, Mat_<float> &P2){
-    ifstream myfile;
-    myfile.open(calib_filename.c_str(),ifstream::in);
-    //get first line (containing P0)
-    char line[512];
-    myfile.getline(line,512);
-    getProjectionMatrix(line,P1);
-    myfile.getline(line,512);
-    getProjectionMatrix(line,P2);
-    myfile.close();
-}
-
-static void readBoundingVolume(const string filename, Vec3f &ptBL, Vec3f & ptTR){
-    ifstream myfile;
-    myfile.open(filename.c_str(),ifstream::in);
-    char line[512];
-    //bottom left point
-    myfile.getline(line,512);
-    read3Dpoint(line,ptBL);
-    //top right point
-    myfile.getline(line,512);
-    read3Dpoint(line,ptTR);
-
-    myfile.close();
-}
-
 
 static void readCameraFileStrecha(const string camera_filename, float &focalLength){
     // only interested in focal length, but possible to get also other internal and external camera parameters
@@ -131,11 +105,6 @@ static void readKRtFileMiddlebury(const string filename, vector<Camera> cameras,
         >> K(0,0) >> K(0,1) >> K(0,2) >> K(1,0) >> K(1,1) >> K(1,2) >> K(2,0) >> K(2,1) >> K(2,2) //
         >> R(0,0) >> R(0,1) >> R(0,2) >> R(1,0) >> R(1,1) >> R(1,2) >> R(2,0) >> R(2,1) >> R(2,2) //
         >> vt(0) >> vt(1) >> vt(2);
-        /*cout << "K is " << K << endl;*/
-        /*cout << "R is " << R << endl;*/
-        /*cout << "t is " << vt << endl;*/
-        //cout << "Filename is " << tmp << endl;
-        //cout << "image Filename is " << inputFiles.img_filenames[i] << endl;
         for( size_t j = 0; j < inputFiles.img_filenames.size(); j++) {
             if( tmp == inputFiles.img_filenames[j]) {
                 truei=j;
@@ -146,70 +115,11 @@ static void readKRtFileMiddlebury(const string filename, vector<Camera> cameras,
         /*Mat t(vt);*/
         hconcat(R, t, Rt);
         cameras[truei].P = K*Rt;
-        /*cout << "Rt is " << Rt<< endl;*/
-        /*cout << "P is " << P << endl;*/
-        /*cout << "P is " << cameras[i].P << endl;*/
         i++;
     }
-
-
-    /*while (os >> temp)                //the stringstream makes temp a token*/
-        /*std::cout <<temp <<std::endl;   //and deletes that token from itself*/
-    //the token can now be
-    //outputted to console, or put into an array,
-    //or whatever you choose to do ith it .
     return;
 }
 
-static void readCalibFileDaisy(const string calib_filename, Mat_<float> &P){
-    ifstream myfile;
-    myfile.open(calib_filename.c_str(),ifstream::in);
-
-    char line[512];
-    while (myfile.getline(line, 512)) {
-        if(line[0] == 'p')
-            getProjectionMatrix(line,P);
-    }
-
-
-    myfile.close();
-}
-
-static void writeImageToFile(const char* outputFolder,const char* name,const Mat &img){
-    char outputPath[256];
-    sprintf(outputPath, "%s/%s.png", outputFolder,name);
-    imwrite(outputPath,img);
-}
-
-static void writeParametersToFile(char* resultsFile, InputFiles inputFiles, AlgorithmParameters &algParameters, uint32_t numPixels){
-
-    ofstream myfile;
-    myfile.open (resultsFile, ios::out);
-    myfile << "Number of images: " << inputFiles.img_filenames.size() << endl;
-    myfile << "Image folder: " << inputFiles.images_folder << endl;
-    myfile << "Images: ";
-    for(size_t i=0; i < inputFiles.img_filenames.size(); i++)
-        myfile << inputFiles.img_filenames[i] << ", " ;
-    myfile << endl;
-    if(numPixels != 0)
-        myfile << "Num. pixels: " << numPixels << endl;
-    myfile << "\nParameters:" << endl;
-    myfile << "  Max. disparity: " << algParameters.max_disparity << endl;
-    myfile << "  Depth min: " << algParameters.depthMin << endl;
-    myfile << "  Depth max: " << algParameters.depthMax << endl;
-    myfile << "  color processing: ";
-    if(algParameters.color_processing)
-        myfile << "yes" << endl;
-    else
-        myfile << "no" << endl;
-    myfile << "  view selection: ";
-    if(algParameters.viewSelection)
-        myfile << "yes" << endl;
-    else
-        myfile << "no" << endl;
-    myfile.close();
-}
-// read ground truth depth map file (dmb) (provided by Tola et al. "DAISY: A Fast Local Descriptor for Dense Matching" http://cvlab.epfl.ch/software/daisy)
 static int readDmbNormal (const char *filename, Mat_<Vec3f> &img)
 {
     FILE *inimage;
@@ -282,55 +192,6 @@ static int readDmb(const char *filename, Mat_<float> &img)
     fclose(inimage);
     return 0;
 
-}
-static int writeDmbNormal(const char *filename, Mat_<Vec3f> &img){
-    FILE *outimage;
-    outimage = fopen(filename, "wb");
-    if (!outimage)
-        printf("Error opening file %s",filename);
-
-    int32_t type = 1; //float
-    int32_t h = img.rows;
-    int32_t w = img.cols;
-    int32_t nb = 3;
-
-    fwrite(&type,sizeof(int32_t),1,outimage);
-    fwrite(&h,sizeof(int32_t),1,outimage);
-    fwrite(&w,sizeof(int32_t),1,outimage);
-    fwrite(&nb,sizeof(int32_t),1,outimage);
-
-    float* data = (float*)img.data;
-
-    int32_t datasize = w*h*nb;
-    fwrite(data,sizeof(float),datasize,outimage);
-
-    fclose(outimage);
-    return 0;
-}
-
-static int writeDmb(const char *filename, Mat_<float> &img){
-    FILE *outimage;
-    outimage = fopen(filename, "wb");
-    if (!outimage)
-        printf("Error opening file %s",filename);
-
-    int32_t type = 1; //float
-    int32_t h = img.rows;
-    int32_t w = img.cols;
-    int32_t nb = 1;
-
-    fwrite(&type,sizeof(int32_t),1,outimage);
-    fwrite(&h,sizeof(int32_t),1,outimage);
-    fwrite(&w,sizeof(int32_t),1,outimage);
-    fwrite(&nb,sizeof(int32_t),1,outimage);
-
-    float* data = (float*)img.data;
-
-    int32_t datasize = w*h*nb;
-    fwrite(data,sizeof(float),datasize,outimage);
-
-    fclose(outimage);
-    return 0;
 }
 
 static int readPfm( const char *filename,

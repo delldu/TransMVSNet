@@ -204,16 +204,16 @@ def probability_filter(dense_folder, prob_threshold):
 def depth_map_fusion(point_folder, fusibile_exe_path, disp_thresh, num_consistent):
     cam_folder = os.path.join(point_folder, 'cams')
     image_folder = os.path.join(point_folder, 'images')
-    depth_min = 0.001
-    depth_max = 100000
+    # depth_min = 0.001
+    # depth_max = 100000
     normal_thresh = 360
 
     cmd = fusibile_exe_path
     cmd = cmd + ' -input_folder ' + point_folder + '/'
     cmd = cmd + ' -p_folder ' + cam_folder + '/'
     cmd = cmd + ' -images_folder ' + image_folder + '/'
-    cmd = cmd + ' --depth_min=' + str(depth_min)
-    cmd = cmd + ' --depth_max=' + str(depth_max)
+    # cmd = cmd + ' --depth_min=' + str(depth_min)
+    # cmd = cmd + ' --depth_max=' + str(depth_max)
     cmd = cmd + ' --normal_thresh=' + str(normal_thresh)
     cmd = cmd + ' --disp_thresh=' + str(disp_thresh)
     cmd = cmd + ' --num_consistent=' + str(num_consistent)
