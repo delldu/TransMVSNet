@@ -25,7 +25,7 @@ public:
     {
         maximum=n;
         points = (Point_li *) malloc (sizeof(Point_li) * n);
-        memset            (points,  0, sizeof(Point_li) * n);
+        memset(points,  0, sizeof(Point_li) * n);
     }
     void increase_size(int n)
     {

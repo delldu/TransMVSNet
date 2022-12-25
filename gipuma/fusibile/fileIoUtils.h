@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 
+#if 0
 static void getProjectionMatrix(char* line, Mat_<float> &P){
     const char* p;
     int idx = 0;
@@ -53,6 +54,7 @@ static void readCameraFileStrecha(const string camera_filename, float &focalLeng
     focalLength = (float)atof(p);
     myfile.close();
 }
+#endif
 
 static void readPFileStrechaPmvs(const string p_filename, Mat_<float> &P){
     ifstream myfile;
@@ -82,6 +84,8 @@ static void readPFileStrechaPmvs(const string p_filename, Mat_<float> &P){
     }
     myfile.close();
 }
+
+#if 0
 static void readKRtFileMiddlebury(const string filename, vector<Camera> cameras, InputFiles inputFiles)
 {
     ifstream myfile;
@@ -119,6 +123,7 @@ static void readKRtFileMiddlebury(const string filename, vector<Camera> cameras,
     }
     return;
 }
+#endif
 
 static int readDmbNormal (const char *filename, Mat_<Vec3f> &img)
 {
@@ -194,6 +199,7 @@ static int readDmb(const char *filename, Mat_<float> &img)
 
 }
 
+#if 0
 static int readPfm( const char *filename,
                     //double ***u, // double matrix image
                     Mat_<float> &img,
@@ -224,10 +230,8 @@ static int readPfm( const char *filename,
       while (row[0]=='#'||row[0]=='\n') fgets(row, 4096, inimage);
       sscanf (row, "%ld %ld", nx, ny);
       fgets (row, 4096, inimage);
-      //    fgets (row, 4096, inimage);
 
       /* allocate storage */
-      //alloc_matrix_d (u, *nx, *ny);
       img = Mat::zeros((int)*ny,(int)*nx,CV_32F);
 
       /* read image data */
@@ -247,18 +251,14 @@ static int readPfm( const char *filename,
 
       sscanf (row, "%ld %ld", nx, ny);
 
-//      fgets (row, 4096, inimage);
       double scale;
       fscanf(inimage, "%lf\n", &scale);
-//      printf("Scale is %f\n", scale);
-      //    fgets (row, 4096, inimage);
 
       /* allocate storage */
-      //alloc_matrix_d (u, (*nx)*4*3, (*ny)*4*3);
       img = Mat::zeros((int)*ny,(int)*nx,CV_32F);
 
       float tmpfloat;
-//      printf("Float is %lu bytes big\n", sizeof(float));
+
       /* read image data */
       for (j=*ny-1; j>=0; j--) {
           for (i=0; i<*nx; i++) {
@@ -300,3 +300,4 @@ static int readPfm( const char *filename,
     return 0;
 
 }
+#endif

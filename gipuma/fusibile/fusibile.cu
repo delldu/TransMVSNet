@@ -24,23 +24,6 @@
 //#define SMOOTHNESS
 
 #define FORCEINLINE __forceinline__
-//#define FORCEINLINE
-
-
-__device__ float K[16];
-__device__ float K_inv[16];
-
-/*__device__ FORCEINLINE __constant__ float4 camerasK[32];*/
-
-/* compute depth value from disparity or disparity value from depth
- * Input:  f         - focal length in pixel
- *         baseline  - baseline between cameras (in meters)
- *         d - either disparity or depth value
- * Output: either depth or disparity value
- */
-__device__ FORCEINLINE float disparityDepthConversion_cu ( const float &f, const float &baseline, const float &d ) {
-    return f * baseline / d;
-}
 
 /* compute depth value from disparity or disparity value from depth
  * Input:  f         - focal length in pixel
@@ -63,53 +46,6 @@ __device__ FORCEINLINE void get3Dpoint_cu ( float4 * __restrict__ ptX, const Cam
 
     matvecmul4 (cam.M_inv, pt, ptX);
 }
-__device__ FORCEINLINE void get3Dpoint_cu1 ( float4 * __restrict__ ptX, const Camera_cu &cam, const int2 &p) {
-    // in case camera matrix is not normalized: see page 162, then depth might not be the real depth but w and depth needs to be computed from that first
-    float4 pt;
-    pt.x = (float)p.x     - cam.P_col34.x;
-    pt.y = (float)p.y     - cam.P_col34.y;
-    pt.z = 1.0f           - cam.P_col34.z;
-
-    matvecmul4 (cam.M_inv, pt, ptX);
-}
-//get d parameter of plane pi = [nT, d]T, which is the distance of the plane to the camera center
-__device__ FORCEINLINE float getPlaneDistance_cu ( const float4 &normal, const float4 &X ) {
-    return -(dot4(normal,X));
-}
-
-__device__ FORCEINLINE void normalize_cu (float4 * __restrict__ v)
-{
-    const float normSquared = pow2(v->x) + pow2(v->y) + pow2(v->z);
-    const float inverse_sqrt = rsqrtf (normSquared);
-    v->x *= inverse_sqrt;
-    v->y *= inverse_sqrt;
-    v->z *= inverse_sqrt;
-}
-__device__ FORCEINLINE void getViewVector_cu (float4 * __restrict__ v, const Camera_cu &camera, const int2 &p)
-{
-    get3Dpoint_cu1 (v, camera, p);
-    sub((*v), camera.C4);
-    normalize_cu(v);
-    //v->x=0;
-    //v->y=0;
-    //v->z=1;
-}
-
-__device__ FORCEINLINE float l1_norm(float f) {
-    return fabsf(f);
-}
-__device__ FORCEINLINE float l1_norm(float4 f) {
-    return ( fabsf (f.x) +
-             fabsf (f.y) +
-             fabsf (f.z))*0.3333333f;
-
-}
-__device__ FORCEINLINE float l1_norm2(float4 f) {
-    return ( fabsf (f.x) +
-             fabsf (f.y) +
-             fabsf (f.z));
-
-}
 
 /* get angle between two vectors in 3D
  * Input: v1,v2 - vectors
@@ -117,11 +53,6 @@ __device__ FORCEINLINE float l1_norm2(float4 f) {
  */
 __device__ FORCEINLINE float getAngle_cu ( const float4 &v1, const float4 &v2 ) {
     float angle = acosf ( dot4(v1, v2));
-    //if angle is not a number the dot product was 1 and thus the two vectors should be identical --> return 0
-    if ( angle != angle )
-        return 0.0f;
-    //if ( acosf ( v1.dot ( v2 ) ) != acosf ( v1.dot ( v2 ) ) )
-    //cout << acosf ( v1.dot ( v2 ) ) << " / " << v1.dot ( v2 )<< " / " << v1<< " / " << v2 << endl;
     return angle;
 }
 __device__ FORCEINLINE void project_on_camera (const float4 &X, const Camera_cu &cam, float2 *pt, float *depth) {
@@ -203,8 +134,14 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
             tmp_normal_and_depth   = tex2D<float4> (gs.normals_depths[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
             //printf("New depth is %f vs %f\n", tmp_normal_and_depth.w, depth);
 
-            const float depth_disp = disparityDepthConversion_cu2                ( camParams.cameras[ref_camera].f, camParams.cameras[ref_camera], camParams.cameras[idxCurr], depth );
-            const float tmp_normal_and_depth_disp = disparityDepthConversion_cu2 ( camParams.cameras[ref_camera].f, camParams.cameras[ref_camera], camParams.cameras[idxCurr], tmp_normal_and_depth.w );
+            const float depth_disp = disparityDepthConversion_cu2(
+                camParams.cameras[ref_camera].f, camParams.cameras[ref_camera], 
+                camParams.cameras[idxCurr], depth );
+            const float tmp_normal_and_depth_disp = disparityDepthConversion_cu2(
+                camParams.cameras[ref_camera].f,
+                camParams.cameras[ref_camera],
+                camParams.cameras[idxCurr], tmp_normal_and_depth.w );
+            
             // First consistency check on depth
             if (fabsf(depth_disp - tmp_normal_and_depth_disp) < gs.params->depthThresh) {
                 //printf("\tFirst consistency test passed!\n");
@@ -223,7 +160,7 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
                     consistent_X      = consistent_X      + tmp_X;
                     //consistent_X      = tmp_X;
                     consistent_normal = consistent_normal + tmp_normal_and_depth;
-                    if (gs.params->saveTexture)
+                    if (1) // gs.params->saveTexture)
                         consistent_texture4 = consistent_texture4 + tex2D<float4> (gs.imgs[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
                     // Save the point for later check
@@ -235,8 +172,6 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
                 }
             }
         }
-        else
-            continue;
     }
 
     // Average normals and points
@@ -249,17 +184,9 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     // Save normal
     // (optional) save texture
     if (number_consistent >= gs.params->numConsistentThresh) {
-        //printf("\tEnough consistent points!\nSaving point %f %f %f", consistent_X.x, consistent_X.y, consistent_X.z);
-        if (!gs.params->remove_black_background) // hardcoded for middlebury TODO FIX
-        {
-            gs.pc->points[center].coord  = consistent_X;
-            gs.pc->points[center].normal = consistent_normal;
-
-#ifdef SAVE_TEXTURE
-            if (gs.params->saveTexture)
-                gs.pc->points[center].texture4 = consistent_texture4;
-#endif
-        }
+        gs.pc->points[center].coord  = consistent_X;
+        gs.pc->points[center].normal = consistent_normal;
+        gs.pc->points[center].texture4 = consistent_texture4;
     }
 
     return;
@@ -276,15 +203,11 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
             const float4 X      = p.coord;
             const float4 normal = p.normal;
             float texture4[4];
-#ifdef SAVE_TEXTURE
-            if (gs.params->saveTexture)
-            {
-                texture4[0] = p.texture4.x;
-                texture4[1] = p.texture4.y;
-                texture4[2] = p.texture4.z;
-                texture4[3] = p.texture4.w;
-            }
-#endif
+            texture4[0] = p.texture4.x;
+            texture4[1] = p.texture4.y;
+            texture4[2] = p.texture4.z;
+            texture4[3] = p.texture4.w;
+
             if (count==pc_list.maximum) {
                 printf("Not enough space to save points :'(\n... allocating more! :)");
                 pc_list.increase_size(pc_list.maximum*2);
@@ -293,12 +216,10 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
             if (X.x != 0 && X.y != 0 && X.z != 0) {
                 pc_list.points[count].coord   = X;
                 pc_list.points[count].normal  = normal;
-#ifdef SAVE_TEXTURE
                 pc_list.points[count].texture4[0] = texture4[0];
                 pc_list.points[count].texture4[1] = texture4[1];
                 pc_list.points[count].texture4[2] = texture4[2];
                 pc_list.points[count].texture4[3] = texture4[3];
-#endif
                 count++;
             }
             p.coord = make_float4(0,0,0,0);
@@ -401,10 +322,6 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
 int runcuda(GlobalState &gs, PointCloudList &pc_list, int num_views)
 {
     printf("Run cuda\n");
-    /*GlobalState *gs = new GlobalState;*/
-    if(gs.params->color_processing)
-        fusibile_cu<float4>(gs, pc_list, num_views);
-    else
-        fusibile_cu<float>(gs, pc_list, num_views);
+    fusibile_cu<float4>(gs, pc_list, num_views);
     return 0;
 }

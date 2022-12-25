@@ -46,6 +46,7 @@ Mat_<float> getCameraCenter ( Mat_<float> &P ) {
     return C;
 }
 
+#if 0
 inline Vec3f get3Dpoint ( Camera &cam, float x, float y, float depth ) {
     // in case camera matrix is not normalized: see page 162, then depth might not be the real depth but w and depth needs to be computed from that first
 
@@ -61,31 +62,8 @@ inline Vec3f get3Dpoint ( Camera &cam, float x, float y, float depth ) {
 inline Vec3f get3Dpoint ( Camera &cam, int x, int y, float depth ){
     return get3Dpoint(cam,(float)x,(float)y,depth);
 }
+#endif
 
-// get the viewing ray for a pixel position of the camera
-static inline Vec3f getViewVector ( Camera &cam, int x, int y) {
-
-    //get some point on the line (the other point on the line is the camera center)
-    Vec3f ptX = get3Dpoint ( cam,x,y,1.0f );
-
-    //get vector between camera center and other point on the line
-    Vec3f v = ptX - cam.C;
-    return normalize ( v );
-}
-
-//get d parameter of plane pi = [nT, d]T, which is the distance of the plane to the camera center
-float inline getPlaneDistance ( Vec3f &normal, Vec3f &X ) {
-    /*return -normal ( 0 )*X ( 0 )-normal ( 1 )*X ( 1 )-normal ( 2 )*X ( 2 );*/
-    return -(normal.dot(X));
-}
-
-static float getD ( Vec3f &normal, int x0, int y0, float depth, Camera &cam ) {
-    Vec3f pt;
-    {
-        pt = get3Dpoint ( cam, (float)x0, (float)y0, depth );
-    }
-    return getPlaneDistance ( normal,pt );
-}
 
 Mat_<float> getTransformationMatrix ( Mat_<float> R, Mat_<float> t ) {
     Mat_<float> transMat = Mat::eye ( 4,4, CV_32F );
@@ -102,6 +80,7 @@ Mat_<float> getTransformationMatrix ( Mat_<float> R, Mat_<float> t ) {
  *         d - either disparity or depth value
  * Output: either depth or disparity value
  */
+#if 0
 float disparityDepthConversion ( float f, float baseline, float d ) {
     /*if ( d == 0 )*/
         /*return FLT_MAX;*/
@@ -115,6 +94,7 @@ Mat_<float> getTransformationReferenceToOrigin ( Mat_<float> R,Mat_<float> t ) {
     // get transformation matrix for [R1|t1] = [I|0]
     return transMat_original.inv ();
 }
+#endif
 
 void transformCamera ( Mat_<float> R,Mat_<float> t, Mat_<float> transform, Camera &cam, Mat_<float> K ) {
     // create rotation translation matrix
@@ -169,7 +149,8 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
  *         scaleFactor - if image was rescaled we need to adapt calibration matrix K accordingly
  * Output: camera parameters
  */
-CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inputFiles, float depthMin, float depthMax, float scaleFactor = 1.0f, bool transformP = true ) {
+CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inputFiles, float depthMin, float depthMax) {
+    float scaleFactor = 1.0f;
 
     CameraParameters params;
     size_t numCameras = 2;
@@ -220,8 +201,6 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     //computeTranslatedProjectionMatrices(R1, R2, t1, t2, params);
     Mat_<float> transform = Mat::eye ( 4,4,CV_32F );
 
-    if ( transformP )
-        transform = getTransformationReferenceToOrigin ( R[0],t[0] );
     /*cout << "transform is " << transform << endl;*/
     params.cameras[0].reference = true;
     params.idRef = 0;

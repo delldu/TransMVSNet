@@ -293,7 +293,7 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     size_t numImages = inputFiles.img_filenames.size ();
     cout << "numImages is " << numImages << endl;
     cout << "img_filenames is " << inputFiles.img_filenames.size() << endl;
-    algParameters.num_img_processed = min ( ( int ) numImages, algParameters.num_img_processed );
+    // algParameters.num_img_processed = min ( ( int ) numImages, algParameters.num_img_processed );
 
     vector<Mat_<Vec3b> > img_color; // imgLeft_color, imgRight_color;
     vector<Mat_<uint8_t> > img_grayscale;
@@ -321,11 +321,12 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     used = total - avail;
     printf("Device memory used: %fMB\n", used/1000000.0f);
 
+    printf("algParameters.depthMin = %10.2f, algParameters.depthMax = %10.2f", 
+        algParameters.depthMin, algParameters.depthMax);
+
     CameraParameters camParams = getCameraParameters (*(gs->cameras),
                                                       inputFiles, algParameters.depthMin,
-                                                      algParameters.depthMax,
-                                                      algParameters.cam_scale,
-                                                      false);
+                                                      algParameters.depthMax);
     printf("Camera size is %lu\n", camParams.cameras.size());
 
     selectViews (camParams);
@@ -377,8 +378,8 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     // Init ImageInfo
     gs->cameras->cols = img_grayscale[0].cols;
     gs->cameras->rows = img_grayscale[0].rows;
-    gs->params->cols = img_grayscale[0].cols;
-    gs->params->rows = img_grayscale[0].rows;
+    // gs->params->cols = img_grayscale[0].cols;
+    // gs->params->rows = img_grayscale[0].rows;
     gs->resize (img_grayscale.size());
     gs->pc->resize (img_grayscale[0].rows * img_grayscale[0].cols);
 	PointCloudList pc_list;
@@ -428,18 +429,15 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     //int64_t t = getTickCount ();
 
     // Copy images to texture memory
-    if (algParameters.saveTexture) {
-        addImageToTextureFloatColor (img_color_float_alpha, gs->imgs);
-    }
-
+    addImageToTextureFloatColor (img_color_float_alpha, gs->imgs);
     addImageToTextureFloatColor (normals_and_depth, gs->normals_depths);
 
-    runcuda(*gs, pc_list, numSelViews); // xxxx8888
-    Mat_<float> distImg;
+    runcuda(*gs, pc_list, numSelViews);
+
     char plyFile[256];
     sprintf ( plyFile, "%s/final3d_model.ply", output_folder);
     printf("Writing ply file %s\n", plyFile);
-    storePlyFileBinaryPointCloud (plyFile, pc_list, distImg);
+    storePlyFileBinaryPointCloud (plyFile, pc_list);
 
     return 0;
 }
@@ -458,7 +456,6 @@ int main(int argc, char **argv)
     if ( ret != 0 )
         return ret;
 
-    Results results;
     ret = runFusibile ( argc, argv, *algParameters);
 
     return 0;
