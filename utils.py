@@ -25,20 +25,33 @@ def recursive_apply(obj: Union[List, Dict], func):
         else:
             obj[k] = func(obj[k])
 
-def visualize_depth(depth, mask=None, depth_min=None, depth_max=None, direct=False):
+def visualize_depth1(depth):
     """Visualize the depth map with colormap.
        Rescales the values so that depth_min and depth_max map to 0 and 1,
        respectively.
     """
-    if not direct:
-        depth = 1.0 / (depth + 1e-6)
+    # depth hypotheses 425mm to 935mm
+    depth = (depth - 425.0)/2.0
+    depth_scaled_uint8 = np.uint8((depth - 425.0)/2.0)
+    depth_color = cv2.applyColorMap(depth_scaled_uint8, cv2.COLORMAP_MAGMA)
+
+    return depth_color
+
+
+def visualize_depth(depth):
+    """Visualize the depth map with colormap.
+       Rescales the values so that depth_min and depth_max map to 0 and 1,
+       respectively.
+    """
+    depth = 1.0 / (depth + 1e-6)
     invalid_mask = np.logical_or(np.isnan(depth), np.logical_not(np.isfinite(depth)))
-    if mask is not None:
-        invalid_mask += np.logical_not(mask)
-    if depth_min is None:
-        depth_min = np.percentile(depth[np.logical_not(invalid_mask)], 5)
-    if depth_max is None:
-        depth_max = np.percentile(depth[np.logical_not(invalid_mask)], 95)
+    depth_min = np.percentile(depth[np.logical_not(invalid_mask)], 5)
+    depth_max = np.percentile(depth[np.logical_not(invalid_mask)], 95)
+
+    # print(f"depth hypotheses 425mm to 935mm, real: {1.0/depth_max:.2f} -- {1.0/depth_min: .2f}")
+    # depth: 0.00120699, 0.00180233
+    # confidence: 1.03917617, 65.83818550
+
     depth[depth < depth_min] = depth_min
     depth[depth > depth_max] = depth_max
     depth[invalid_mask] = depth_max

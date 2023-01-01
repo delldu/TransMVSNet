@@ -6,10 +6,6 @@
 #include <sstream>
 #include <fstream>
 
-#if (CV_MAJOR_VERSION ==2)
-#include <opencv2/contrib/contrib.hpp> // needed for applyColorMap!
-#endif
-
 #include "point_cloud.h"
 #include "point_cloud_list.h"
 
@@ -32,7 +28,6 @@ static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc)
     fprintf(outputPly, "property uchar blue\n");
     fprintf(outputPly, "end_header\n");
 
-    // distImg = Mat::zeros(pc.rows,pc.cols,CV_32F);
 
     //write data
 #pragma omp parallel for
@@ -43,8 +38,6 @@ static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc)
         const char color_r = (int)p.texture4[2];
         const char color_g = (int)p.texture4[1];
         const char color_b = (int)p.texture4[0];
-        /*const int color = 127.0f;*/
-        /*printf("Writing point %f %f %f\n", X.x, X.y, X.z);*/
 
         if(!(X.x < FLT_MAX && X.x > -FLT_MAX) || !(X.y < FLT_MAX && X.y > -FLT_MAX) || !(X.z < FLT_MAX && X.z >= -FLT_MAX)){
             X.x = 0.0f;
@@ -61,7 +54,6 @@ static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc)
             fwrite(&color_g,  sizeof(char), 1, outputPly);
             fwrite(&color_b,  sizeof(char), 1, outputPly);
         }
-
     }
     fclose(outputPly);
 }

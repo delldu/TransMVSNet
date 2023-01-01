@@ -1,7 +1,5 @@
 #pragma once
 #include <string.h> // memset()
-#include "algorithmparameters.h"
-#include "cameraparameters.h"
 #include "managed.h"
 #include <vector_types.h> // float4
 
@@ -19,14 +17,13 @@ public:
     Point_cu *points;
     int rows;
     int cols;
-    int size;
-    void resize(int n)
-    {
-        cudaMallocManaged (&points,    sizeof(Point_cu) * n);
-        memset            (points,  0, sizeof(Point_cu) * n);
+
+    void resize(int n) {
+        cudaMallocManaged (&points, sizeof(Point_cu) * n);
+        memset(points,  0, sizeof(Point_cu) * n);
     }
-    ~PointCloud()
-    {
+
+    ~PointCloud() {
         cudaFree (points);
     }
 };

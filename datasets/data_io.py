@@ -62,12 +62,18 @@ def save_pfm(filename, image, scale=1):
     file.write('PF\n'.encode('utf-8') if color else 'Pf\n'.encode('utf-8'))
     file.write('{} {}\n'.format(image.shape[1], image.shape[0]).encode('utf-8'))
 
-    endian = image.dtype.byteorder
+    endian = image.dtype.byteorder # '='
+    # image.min() -- 377.54855
+    # image.max() -- 978.6003
+    # image.mean() -- 647.0822
 
-    if endian == '<' or endian == '=' and sys.byteorder == 'little':
+    if endian == '<' or endian == '=' and sys.byteorder == 'little': # True
         scale = -scale
 
     file.write(('%f\n' % scale).encode('utf-8'))
+    # Pf -- Grey Image
+    # 1152 864 -- W, H
+    # -1.000000 -- Little endian
 
     image.tofile(file)
     file.close()

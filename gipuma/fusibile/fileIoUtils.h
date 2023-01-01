@@ -29,7 +29,7 @@ static void readPFileStrechaPmvs(const string p_filename, Mat_<float> &P){
         for (p = strtok( line, " " );  p;  p = strtok( NULL, " " ))
         {
             float val = (float)atof(p);
-            P(i,j)=val;
+            P(i,j) = val;
             j++;
         }
     }
@@ -49,10 +49,10 @@ static int readDmbNormal (const char *filename, Mat_<Vec3f> &img)
 
     type = -1;
 
-    fread(&type,sizeof(int32_t),1,inimage);
-    fread(&h,sizeof(int32_t),1,inimage);
-    fread(&w,sizeof(int32_t),1,inimage);
-    fread(&nb,sizeof(int32_t),1,inimage);
+    fread(&type,sizeof(int32_t), 1, inimage);
+    fread(&h,sizeof(int32_t), 1, inimage);
+    fread(&w,sizeof(int32_t), 1, inimage);
+    fread(&nb,sizeof(int32_t), 1, inimage);
 
     //only support float
     if(type != 1){
@@ -64,7 +64,7 @@ static int readDmbNormal (const char *filename, Mat_<Vec3f> &img)
 
     float* data;
     data = (float*) malloc (sizeof(float)*dataSize);
-    fread(data,sizeof(float),dataSize,inimage);
+    fread(data,sizeof(float), dataSize, inimage);
 
     img = Mat(h,w,CV_32FC3,data);
 
@@ -86,10 +86,10 @@ static int readDmb(const char *filename, Mat_<float> &img)
 
     type = -1;
 
-    fread(&type,sizeof(int32_t),1,inimage);
-    fread(&h,sizeof(int32_t),1,inimage);
-    fread(&w,sizeof(int32_t),1,inimage);
-    fread(&nb,sizeof(int32_t),1,inimage);
+    fread(&type,sizeof(int32_t), 1, inimage);
+    fread(&h,sizeof(int32_t), 1, inimage);
+    fread(&w,sizeof(int32_t), 1, inimage);
+    fread(&nb,sizeof(int32_t), 1, inimage);
 
     //only support float
     if(type != 1){
@@ -101,7 +101,7 @@ static int readDmb(const char *filename, Mat_<float> &img)
 
     float* data;
     data = (float*) malloc (sizeof(float)*dataSize);
-    fread(data,sizeof(float),dataSize,inimage);
+    fread(data,sizeof(float), dataSize, inimage);
 
     img = Mat(h,w,CV_32F,data);
 

@@ -198,30 +198,35 @@ def save_scene_depth(testlist):
                 conf_2 = cv2.resize(conf_2, (W,H))
                 conf_final = photo_confidence * conf_1 * conf_2
 
-                depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
-                confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
-                cam_filename = os.path.join(args.outdir, filename.format('cams', '_cam.txt'))
-                img_filename = os.path.join(args.outdir, filename.format('images', '.jpg'))
-                os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(cam_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
-
-
                 # save depth maps
+                depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
+                os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
+                # depth hypotheses 425mm to 935mm
+                # depth_est = depth_est.clamp(425.0, 935.0)
                 save_pfm(depth_filename, depth_est)
                 depth_color = visualize_depth(depth_est)
                 cv2.imwrite(os.path.join(args.outdir, filename.format('depth_est', '.png')), depth_color)
 
                 # save confidence maps
+                confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
+                os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
                 save_pfm(confidence_filename, conf_final)
                 # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_1.png')),visualize_depth(conf_1))
                 # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_2.png')),visualize_depth(conf_2))
                 # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_3.png')), visualize_depth(photo_confidence))
-                cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_final.png')),visualize_depth(conf_final))
+                # xxxx8888
+                pdb.set_trace()
+                
+                cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_final.png')),
+                    visualize_depth(conf_final))
 
                 # save cams, img
-                write_cam(cam_filename, cam)
+                cam_filename = os.path.join(args.outdir, filename.format('cams', '_cam.txt'))
+                os.makedirs(cam_filename.rsplit('/', 1)[0], exist_ok=True)
+                write_cam(cam_filename, cam) # cam.shape -- (2, 4, 4)
+
+                img_filename = os.path.join(args.outdir, filename.format('images', '.jpg'))
+                os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
                 img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(img_filename, img_bgr)

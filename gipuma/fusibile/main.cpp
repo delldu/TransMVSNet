@@ -45,7 +45,7 @@
 #include "main.h"
 #include "fileIoUtils.h"
 #include "cameraGeometryUtils.h"
-#include "mathUtils.h"
+// #include "mathUtils.h"
 #include "displayUtils.h"
 #include "point_cloud_list.h"
 
@@ -138,8 +138,10 @@ static int getParametersFromCommandLine ( int argc,
             sscanf ( argv[i] + strlen (normal_thresh_opt), "%f", &angle_degree );
             parameters.normalThresh = angle_degree * M_PI / 180.0f;
         }
-        else if ( strncmp ( argv[i], num_consistent_opt, strlen (num_consistent_opt) ) == 0 )
+        else if ( strncmp ( argv[i], num_consistent_opt, strlen (num_consistent_opt) ) == 0 ) {
             sscanf ( argv[i] + strlen (num_consistent_opt), "%d", &parameters.numConsistentThresh );
+            std::cout << "Debug: parameters.numConsistentThresh: " << parameters.numConsistentThresh << std::endl;
+        }
         else
         {
             printf ( "Command-line parameter error: unknown option %s\n", argv[i] );
@@ -160,7 +162,7 @@ static void selectViews ( CameraParameters &cameraParams) {
     }
 }
 
-static void addImageToTextureFloatColor (vector<Mat > &imgs, cudaTextureObject_t texs[])
+static void addImageToTextureFloatColor (vector<Mat> &imgs, cudaTextureObject_t texs[])
 {
     for (size_t i=0; i<imgs.size(); i++)
     {
@@ -200,7 +202,6 @@ static void addImageToTextureFloatColor (vector<Mat > &imgs, cudaTextureObject_t
         // Create texture object
         checkCudaErrors(cudaCreateTextureObject(&(texs[i]), &resDesc, &texDesc, NULL));
     }
-    return;
 }
 
 static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameters)
@@ -228,7 +229,6 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     cout <<"image folder is " << inputFiles.images_folder << endl;
     cout <<"p folder is " << inputFiles.p_folder << endl;
 
-    // vector <Mat_<Vec3f> > view_vectors;
 
     char output_folder[256];
     sprintf(output_folder, "%s/consistencyCheck/",results_folder.c_str());
@@ -239,7 +239,8 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
 #endif
 
     vector<string> subfolders;
-    get_subfolders(results_folder.c_str(), subfolders); // results_folder -- outputs/dtu_testing/scan1/points/
+    get_subfolders(results_folder.c_str(), subfolders);
+    // results_folder -- outputs/dtu_testing/scan1/points/
     std::sort(subfolders.begin(), subfolders.end());
 
     map< int,string> consideredIds;
@@ -255,7 +256,7 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
         unsigned found = subfolders[i].substr(posFirst).find_first_of("_") + posFirst +1;
         string id_string = subfolders[i].substr(found);
 
-        consideredIds.insert(pair<int,string>(i,id_string));
+        consideredIds.insert(pair<int,string>(i, id_string));
 
         if( access( (inputFiles.images_folder + id_string + ".png").c_str(), R_OK ) != -1 )
             inputFiles.img_filenames.push_back((id_string + ".png"));
@@ -313,26 +314,27 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     cout << "Size consideredIds is " << consideredIds.size() << endl;
     for (map<int,string>::iterator it=consideredIds.begin(); it!=consideredIds.end(); ++it){
         int i = it->first;
-        string id = it->second;//consideredIds[i];
-        int camIdx = getCameraFromId(id,camParams.cameras);
+        string id = it->second;
+        int camIdx = getCameraFromId(id, camParams.cameras);
         if(camIdx < 0)// || camIdx == camParams.idRef)
             continue;
 
         InputData dat;
         dat.path = results_folder + subfolders[i];
+
+        cout << "Reading image " << inputFiles.images_folder + id + ext << endl;
         dat.inputImage = imread((inputFiles.images_folder + id + ext), IMREAD_COLOR);
 
         //read normal
-        cout << "Reading normal " << i << endl;
+        cout << "Reading normal " << i << ": " << (dat.path + "/normals.dmb").c_str() << endl;
         readDmbNormal((dat.path + "/normals.dmb").c_str(),dat.normals);
 
         //read depth
-        cout << "Reading disp " << i << endl;
+        cout << "Reading disp " << i << ": " << (dat.path + "/disp.dmb").c_str() << endl;
         readDmb((dat.path + "/disp.dmb").c_str(),dat.depthMap);
 
         //inputData.push_back(move(dat));
         inputData.push_back(dat);
-
     }
     // run gpu run
     gs->params = &algParameters;
@@ -343,11 +345,11 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
 
     gs->resize (img_grayscale.size());
     gs->pc->resize (img_grayscale[0].rows * img_grayscale[0].cols);
+
 	PointCloudList pc_list;
-    pc_list.resize (img_grayscale[0].rows * img_grayscale[0].cols);
-    pc_list.size=0;
-    pc_list.rows = img_grayscale[0].rows;
-    pc_list.cols = img_grayscale[0].cols;
+    pc_list.resize (img_grayscale[0].rows * img_grayscale[0].cols); // xxxx????
+
+    pc_list.size = 0;
     gs->pc->rows = img_grayscale[0].rows;
     gs->pc->cols = img_grayscale[0].cols;
 
@@ -360,39 +362,36 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
         gs->lines[i].l = img_grayscale[0].cols;
     }
 
-    vector<Mat > img_grayscale_float(img_grayscale.size());
     vector<Mat > img_color_float(img_grayscale.size());
-    vector<Mat > img_color_float_alpha(img_grayscale.size());
-    vector<Mat > normals_and_depth(img_grayscale.size());
+    vector<Mat > color_images_list(img_grayscale.size());
+    vector<Mat > normal_depth_list(img_grayscale.size());
 
     for (size_t i = 0; i<img_grayscale.size(); i++) {
-        img_grayscale[i].convertTo(img_grayscale_float[i], CV_32FC1); // or CV_32F works (too)
-
         vector<Mat_<float> > rgbChannels ( 3 );
-        img_color_float_alpha[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
+        color_images_list[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
         img_color[i].convertTo (img_color_float[i], CV_32FC3); // or CV_32F works (too)
 
         Mat alpha( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC1 );
         split (img_color_float[i], rgbChannels);
         rgbChannels.push_back( alpha);
-        merge (rgbChannels, img_color_float_alpha[i]);
+        merge (rgbChannels, color_images_list[i]);
 
         /* Create vector of normals and disparities */
         vector<Mat_<float> > normal ( 3 );
-        normals_and_depth[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
+        normal_depth_list[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
         split (inputData[i].normals, normal);
         normal.push_back( inputData[i].depthMap);
-        merge (normal, normals_and_depth[i]);
+        merge (normal, normal_depth_list[i]);
     }
 
     // Copy images to texture memory
-    addImageToTextureFloatColor (img_color_float_alpha, gs->imgs);
-    addImageToTextureFloatColor (normals_and_depth, gs->normals_depths);
+    addImageToTextureFloatColor (color_images_list, gs->color_images_textures);
+    addImageToTextureFloatColor (normal_depth_list, gs->normal_depth_textures);
 
     runcuda(*gs, pc_list, numSelViews);
 
     char plyFile[256];
-    sprintf ( plyFile, "%s/final3d_model.ply", output_folder);
+    sprintf(plyFile, "%s/final3d_model.ply", output_folder);
     printf("Writing ply file %s\n", plyFile);
     storePlyFileBinaryPointCloud (plyFile, pc_list);
 

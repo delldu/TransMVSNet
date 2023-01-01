@@ -108,7 +108,9 @@ class DepthNet(nn.Module):
 
 
 class TransMVSNet(nn.Module):
-    def __init__(self, ndepths=[48, 32, 8], depth_interals_ratio=[4.0, 1.0, 0.5], cr_base_chs=[8, 8, 8]):
+    def __init__(self, ndepths=[48, 32, 8],
+                 depth_interals_ratio=[4.0, 1.0, 0.5],
+                 cr_base_chs=[8, 8, 8]):
         super(TransMVSNet, self).__init__()
         assert len(ndepths) == len(depth_interals_ratio)
 
@@ -133,11 +135,12 @@ class TransMVSNet(nn.Module):
 
         self.feature = FeatureNet(base_channels=8)
         self.FMT_with_pathway = FMT_with_pathway()
-        self.cost_regularization = nn.ModuleList([CostRegNet(in_channels=1, base_channels=self.cr_base_chs[i])
+        self.cost_regularization = nn.ModuleList([CostRegNet(in_channels=1, \
+                base_channels=self.cr_base_chs[i])
                 for i in range(self.num_stage)])
         self.DepthNet = DepthNet()
 
-    def forward(self, imgs, proj_matrix, depth_values, test_tnt=False):
+    def forward(self, imgs, proj_matrix, depth_values):
         depth_min = float(depth_values[0, 0].cpu().numpy())
         depth_max = float(depth_values[0, -1].cpu().numpy())
         depth_interval = (depth_max - depth_min) / depth_values.size(1)
@@ -197,7 +200,8 @@ class TransMVSNet(nn.Module):
 
             wta_index_map = torch.argmax(outputs_stage['prob_volume'], dim=1, keepdim=True).type(torch.long)
             depth = torch.gather(outputs_stage['depth_values'], 1, wta_index_map).squeeze(1)
-            outputs_stage['depth'] = depth
+            # depth hypotheses 425mm to 935mm
+            outputs_stage['depth'] = depth.clamp(425.0, 935.0)
 
             outputs["stage{}".format(stage_idx + 1)] = outputs_stage
             outputs.update(outputs_stage)

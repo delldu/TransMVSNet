@@ -112,6 +112,9 @@ class EncoderLayer(nn.Module):
 
 
 class FMT(nn.Module):
+    '''
+    FMT -- Feature Matching Transformer
+    '''
     def __init__(self, config):
         super(FMT, self).__init__()
 
@@ -138,6 +141,8 @@ class FMT(nn.Module):
         """
 
         assert ref_feature is not None
+
+        # print("FMT forward feat: ", feat) ==> ref, src ...
 
         if feat == "ref": # only self attention layer
 

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "algorithmparameters.h"
-#include "cameraparameters.h"
+// #include "cameraparameters.h"
 #include "linestate.h"
-#include "imageinfo.h"
 #include "managed.h"
 #include "point_cloud.h"
+#include "camera.h"
 
 // Includes CUDA
 #include <cuda_runtime.h>
@@ -27,17 +27,20 @@ public:
     //ImageInfo iminfo;
     LineState *lines;
 
-    // curandState *cs;
+    // xxxx3333 
+    #if 1
     AlgorithmParameters *params;
+    #endif
+
     PointCloud *pc;
 
-    cudaTextureObject_t imgs  [MAX_IMAGES];
-    cudaTextureObject_t normals_depths  [MAX_IMAGES]; // first 3 values normal, fourth depth
+    cudaTextureObject_t color_images_textures[MAX_IMAGES];
+    cudaTextureObject_t normal_depth_textures[MAX_IMAGES]; // first 3 values normal, fourth depth
 
     void resize(int n)
     {
         printf("Resizing globalstate to %d\n", n);
-        cudaMallocManaged (&lines,     sizeof(LineState) * n);
+        cudaMallocManaged (&lines, sizeof(LineState) * n);
     }
 
     ~GlobalState() {

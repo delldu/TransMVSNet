@@ -4,7 +4,7 @@
  */
 
 #pragma once
-#include "mathUtils.h"
+// #include "mathUtils.h"
 #include <limits>
 #include <signal.h>
 
@@ -28,19 +28,19 @@ Mat_<float> getCameraCenter ( Mat_<float> &P ) {
     int tIndices[] = { 0, 1, 2 };
 
     // x coordinate
-    M = getColSubMat ( P,xIndices,sizeof ( xIndices )/sizeof ( xIndices[0] ) );
+    M = getColSubMat ( P, xIndices, sizeof ( xIndices )/sizeof ( xIndices[0] ) );
     C ( 0,0 ) = ( float )determinant ( M );
 
     // y coordinate
-    M = getColSubMat ( P,yIndices,sizeof ( yIndices )/sizeof ( yIndices[0] ) );
+    M = getColSubMat ( P, yIndices,sizeof ( yIndices )/sizeof ( yIndices[0] ) );
     C ( 1,0 ) = - ( float )determinant ( M );
 
     // z coordinate
-    M = getColSubMat ( P,zIndices,sizeof ( zIndices )/sizeof ( zIndices[0] ) );
+    M = getColSubMat ( P, zIndices,sizeof ( zIndices )/sizeof ( zIndices[0] ) );
     C ( 2,0 ) = ( float )determinant ( M );
 
     // t coordinate
-    M = getColSubMat ( P,tIndices,sizeof ( tIndices )/sizeof ( tIndices[0] ) );
+    M = getColSubMat ( P, tIndices,sizeof ( tIndices )/sizeof ( tIndices[0] ) );
     C ( 3,0 ) = - ( float )determinant ( M );
 
     return C;
@@ -55,7 +55,7 @@ Mat_<float> getTransformationMatrix ( Mat_<float> R, Mat_<float> t ) {
     return transMat;
 }
 
-void transformCamera ( Mat_<float> R,Mat_<float> t, Mat_<float> transform, Camera &cam, Mat_<float> K ) {
+void transformCamera (Mat_<float> R, Mat_<float> t, Mat_<float> transform, Camera &cam, Mat_<float> K ) {
     // create rotation translation matrix
     Mat_<float> transMat_original = getTransformationMatrix ( R,t );
 
@@ -109,20 +109,19 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
  *         scaleFactor - if image was rescaled we need to adapt calibration matrix K accordingly
  * Output: camera parameters
  */
-CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inputFiles) {
+CameraParameters getCameraParameters (CameraParameters_cu &cpc, InputFiles inputFiles) {
     float scaleFactor = 1.0f;
+
+    // struct CameraParameters {
+    //     Mat_<float> K; //if K varies from camera to camera: K and f need to be stored within Camera
+    //     vector<Camera> cameras;
+    //     vector<int> viewSelectionSubset;
+    // };
 
     CameraParameters params;
     size_t numCameras = 2;
     params.cameras.resize ( numCameras );
     //get projection matrices
-
-    //load projection matrix from file (e.g. for Kitti)
-    Mat_<float> KMaros = Mat::eye ( 3, 3, CV_32F );
-    KMaros(0,0) = 8066.0;
-    KMaros(1,1) = 8066.0;
-    KMaros(0,2) = 2807.5;
-    KMaros(1,2) = 1871.5;
 
     //load projection matrix from file (e.g. for Strecha)
     cout << "P folder is " << inputFiles.p_folder << endl;
@@ -147,7 +146,7 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     vector<Mat_<float> > t ( numCameras );
 
     for ( size_t i = 0; i < numCameras; i++ ) {
-        decomposeProjectionMatrix ( params.cameras[i].P,K[i],R[i],T[i] );
+        decomposeProjectionMatrix ( params.cameras[i].P, K[i], R[i], T[i] );
 
         // get 3-dimensional translation vectors and camera center (divide by augmented component)
         C[i] = T[i] ( Range ( 0,3 ),Range ( 0,1 ) ) / T[i] ( 3,0 );
@@ -155,32 +154,27 @@ CameraParameters getCameraParameters ( CameraParameters_cu &cpc, InputFiles inpu
     }
 
     // transform projection matrices (R and t part) so that P1 = K [I | 0]
-    //computeTranslatedProjectionMatrices(R1, R2, t1, t2, params);
     Mat_<float> transform = Mat::eye ( 4,4,CV_32F );
 
     //assuming K is the same for all cameras
-    params.K = scaleK ( K[0],scaleFactor );
+    params.K = scaleK ( K[0], scaleFactor );
 
     // get focal length from calibration matrix
-    params.f = params.K ( 0,0 );
-
     for ( size_t i = 0; i < numCameras; i++ ) {
         params.cameras[i].K = scaleK(K[i],scaleFactor);
 
-        transformCamera ( R[i],t[i], transform, params.cameras[i],params.K );
-
+        transformCamera ( R[i], t[i], transform, params.cameras[i],params.K );
         params.cameras[i].M_inv = params.cameras[i].P.colRange ( 0,3 ).inv ();
 
         // K
         copyOpencvMatToFloatArray ( params.cameras[i].K, &cpc.cameras[i].K);
-        cpc.cameras[i].f = params.K(0,0);
 
         // Copy data to cuda structure
         copyOpencvMatToFloatArray ( params.cameras[i].P, &cpc.cameras[i].P);
         copyOpencvMatToFloatArray ( params.cameras[i].M_inv, &cpc.cameras[i].M_inv);
         copyOpencvMatToFloatArray ( params.cameras[i].K, &cpc.cameras[i].K);
-        copyOpencvMatToFloatArray ( params.cameras[i].R,     &cpc.cameras[i].R);
-        copyOpencvVecToFloat4 ( params.cameras[i].C3,         &cpc.cameras[i].C4);
+        copyOpencvMatToFloatArray ( params.cameras[i].R, &cpc.cameras[i].R);
+        copyOpencvVecToFloat4 ( params.cameras[i].C3, &cpc.cameras[i].C4);
 
         Mat_<float> tmp = params.cameras[i].P.col(3);
         cpc.cameras[i].P_col34.x = tmp(0,0);

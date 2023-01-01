@@ -24,24 +24,3 @@ struct InputFiles {
     string camera_folder; // path to camera calibration matrix K (Strecha)
 };
 
-
-struct Camera {
-    Camera () : P ( Mat::eye ( 3,4,CV_32F ) ), R ( Mat::eye ( 3,3,CV_32F ) ) {}
-
-    Mat_<float> P;
-    Mat_<float> M_inv;
-    Mat_<float> R;
-    Mat_<float> t;
-    Vec3f C3; // Camera Center (x, y, z)
-    string id;
-    Mat_<float> K;
-};
-
-//parameters for camera geometry setup (assuming that K1 = K2 = K, P1 = K [I | 0] and P2 = K [R | t])
-struct CameraParameters {
-    CameraParameters () {}
-    Mat_<float> K; //if K varies from camera to camera: K and f need to be stored within Camera
-    float f;
-    vector<Camera> cameras;
-    vector<int> viewSelectionSubset;
-};

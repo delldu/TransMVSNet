@@ -8,9 +8,8 @@
 #include <stdio.h>
 #include "globalstate.h"
 #include "algorithmparameters.h"
-#include "cameraparameters.h"
+#include "camera.h"
 #include "linestate.h"
-#include "imageinfo.h"
 #include "config.h"
 
 #include <vector_types.h> // float4
@@ -31,19 +30,24 @@
  *         d - either disparity or depth value
  * Output: either depth or disparity value
  */
-__device__ FORCEINLINE float disparityDepthConversion_cu2 ( const float &f, const Camera_cu &cam_ref, const Camera_cu &cam, const float &d ) {
+__device__ FORCEINLINE float disparityDepthConversion_cu2 (
+    const float &f, const Camera_cu &cam_ref, const Camera_cu &cam, const float &d )
+{
     float baseline = l2_float4(cam_ref.C4 - cam.C4);
     return f * baseline / d;
 }
 
-__device__ FORCEINLINE void get3Dpoint_cu ( float4 * __restrict__ ptX, const Camera_cu &cam, const int2 &p, const float &depth ) {
-    // in case camera matrix is not normalized: see page 162, then depth might not be the real depth but w and depth needs to be computed from that first
+__device__ FORCEINLINE void get3Dpoint_cu (
+    const Camera_cu &cam, const int2 &p, const float &depth,
+    float4 * __restrict__ ptX)
+{
+    // in case camera matrix is not normalized: see page 162, 
+    // then depth might not be the real depth but w and depth needs to be computed from that first
     const float4 pt = make_float4 (
-                                   depth * (float)p.x     - cam.P_col34.x,
-                                   depth * (float)p.y     - cam.P_col34.y,
-                                   depth                  - cam.P_col34.z,
+                                   depth * (float)p.x - cam.P_col34.x,
+                                   depth * (float)p.y - cam.P_col34.y,
+                                   depth - cam.P_col34.z,
                                    0);
-
     matvecmul4 (cam.M_inv, pt, ptX);
 }
 
@@ -55,11 +59,15 @@ __device__ FORCEINLINE float getAngle_cu ( const float4 &v1, const float4 &v2 ) 
     float angle = acosf ( dot4(v1, v2));
     return angle;
 }
-__device__ FORCEINLINE void project_on_camera (const float4 &X, const Camera_cu &cam, float2 *pt, float *depth) {
+
+__device__ FORCEINLINE void project_on_camera (
+    const float4 &X, const Camera_cu &cam, float2 *pt, float *depth)
+{
     float4 tmp = make_float4 (0, 0, 0, 0);
     matvecmul4P (cam.P, X, (&tmp));
     pt->x = tmp.x / tmp.z;
     pt->y = tmp.y / tmp.z;
+
     *depth = tmp.z;
 }
 
@@ -86,7 +94,7 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
         return;
 
     //printf("ref_camera is %d\n", ref_camera);
-    const float4 normal = tex2D<float4> (gs.normals_depths[ref_camera], p.x+0.5f, p.y+0.5f);
+    const float4 normal = tex2D<float4> (gs.normal_depth_textures[ref_camera], p.x + 0.5f, p.y + 0.5f);
     //printf("Normal is %f %f %f\nDepth is %f\n", normal.x, normal.y, normal.z, normal.w);
     /*
      * For each point of the reference camera compute the 3d position corresponding to the corresponding depth.
@@ -97,12 +105,12 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     float depth = normal.w;
 
     float4 X;
-    get3Dpoint_cu (&X, camParams.cameras[ref_camera], p, depth);
+    get3Dpoint_cu (camParams.cameras[ref_camera], p, depth, &X);
     float4 consistent_X = X;
-    float4 consistent_normal  = normal;
-    float4 consistent_texture4 = tex2D<float4> (gs.imgs[ref_camera], p.x+0.5f, p.y+0.5f);
-    int number_consistent = 0;
+    float4 consistent_normal = normal;
+    float4 consistent_texture4 = tex2D<float4>(gs.color_images_textures[ref_camera], p.x+0.5f, p.y+0.5f);
 
+    int number_consistent = 0;
     for ( int i = 0; i < camParams.viewSelectionSubsetNumber; i++ ) {
 
         int idxCurr = camParams.viewSelectionSubset[i];
@@ -117,28 +125,31 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
         if (tmp_pt.x >=0 && tmp_pt.x < cols && tmp_pt.y >=0 && tmp_pt.y < rows) {
             // Compute interpolated depth and normal for tmp_pt w.r.t. camera ref_camera
             float4 tmp_normal_and_depth; // first 3 components normal, fourth depth
-            tmp_normal_and_depth   = tex2D<float4> (gs.normals_depths[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
-            //printf("New depth is %f vs %f\n", tmp_normal_and_depth.w, depth);
+            tmp_normal_and_depth = tex2D<float4> (gs.normal_depth_textures[idxCurr], 
+                tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
             const float depth_disp = disparityDepthConversion_cu2(
-                camParams.cameras[ref_camera].f, camParams.cameras[ref_camera], 
-                camParams.cameras[idxCurr], depth );
-            const float tmp_normal_and_depth_disp = disparityDepthConversion_cu2(
-                camParams.cameras[ref_camera].f,
-                camParams.cameras[ref_camera],
-                camParams.cameras[idxCurr], tmp_normal_and_depth.w );
+                camParams.cameras[ref_camera].K[0], 
+                camParams.cameras[ref_camera], camParams.cameras[idxCurr],
+                depth );
+            
+            const float tmp_depth_disp = disparityDepthConversion_cu2(
+                camParams.cameras[ref_camera].K[0],
+                camParams.cameras[ref_camera], camParams.cameras[idxCurr],
+                tmp_normal_and_depth.w );
             
             // First consistency check on depth
-            if (fabsf(depth_disp - tmp_normal_and_depth_disp) < gs.params->depthThresh) {
+            if (fabsf(depth_disp - tmp_depth_disp) < gs.params->depthThresh) {
                 float angle = getAngle_cu (tmp_normal_and_depth, normal); // extract normal
                 if (angle < gs.params->normalThresh) {
                     float4 tmp_X; // 3d point of consistent point on other view
                     int2 tmp_p = make_int2 ((int) tmp_pt.x, (int) tmp_pt.y);
+                    get3Dpoint_cu (camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w, &tmp_X);
 
-                    get3Dpoint_cu (&tmp_X, camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w);
-                    consistent_X      = consistent_X      + tmp_X;
+                    consistent_X = consistent_X + tmp_X;
                     consistent_normal = consistent_normal + tmp_normal_and_depth;
-                    consistent_texture4 = consistent_texture4 + tex2D<float4> (gs.imgs[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
+                    consistent_texture4 = consistent_texture4 
+                        + tex2D<float4> (gs.color_images_textures[idxCurr], tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
                     number_consistent++;
                 }
@@ -159,7 +170,6 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
 }
 
 /* Copy point cloud to global memory */
-//template< typename T >
 void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
 {
     printf("Processing camera %d\n", cam);
@@ -167,7 +177,7 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
     for (int y=0; y<gs.pc->rows; y++) {
         for (int x=0; x<gs.pc->cols; x++) {
             Point_cu &p = gs.pc->points[x+y*gs.pc->cols];
-            const float4 X      = p.coord;
+            const float4 X = p.coord;
             const float4 normal = p.normal;
             float texture4[4];
             texture4[0] = p.texture4.x;
@@ -178,11 +188,10 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
             if (count==pc_list.maximum) {
                 printf("Not enough space to save points :'(\n... allocating more! :)");
                 pc_list.increase_size(pc_list.maximum*2);
-
             }
             if (X.x != 0 && X.y != 0 && X.z != 0) {
-                pc_list.points[count].coord   = X;
-                pc_list.points[count].normal  = normal;
+                pc_list.points[count].coord = X;
+                pc_list.points[count].normal = normal;
                 pc_list.points[count].texture4[0] = texture4[0];
                 pc_list.points[count].texture4[1] = texture4[1];
                 pc_list.points[count].texture4[2] = texture4[2];
@@ -199,10 +208,6 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
 template< typename T >
 void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
 {
-#ifdef SHARED
-    cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
-#endif
-
     int rows = gs.cameras->rows;
     int cols = gs.cameras->cols;
     cudaEvent_t start, stop;
@@ -236,13 +241,14 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*128);
 
     dim3 grid_size_initrand;
-    grid_size_initrand.x=(cols+32-1)/32;
-    grid_size_initrand.y=(rows+32-1)/32;
+    grid_size_initrand.x = (cols + 32-1)/32;
+    grid_size_initrand.y = (rows + 32-1)/32;
     dim3 block_size_initrand;
-    block_size_initrand.x=32;
-    block_size_initrand.y=32;
+    block_size_initrand.x = 32;
+    block_size_initrand.y = 32;
 
-    printf("Grid size initrand is grid: %d-%d block: %d-%d\n", grid_size_initrand.x, grid_size_initrand.y, block_size_initrand.x, block_size_initrand.y);
+    printf("Grid size initrand is grid: %d-%d block: %d-%d\n", 
+        grid_size_initrand.x, grid_size_initrand.y, block_size_initrand.x, block_size_initrand.y);
 
     size_t avail;
     size_t total;
@@ -254,9 +260,10 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     printf("Fusing points\n");
     cudaEventRecord(start);
 
-    for (int cam=0; cam<num_views; cam++) {
-        fusibile<<< grid_size_initrand, block_size_initrand, cam>>>(gs, cam);
+    for (int cam=0; cam < num_views; cam++) {
+        fusibile <<< grid_size_initrand, block_size_initrand, cam>>>(gs, cam);
         cudaDeviceSynchronize();
+
         copy_point_cloud_to_host(gs, cam, pc_list); // slower but saves memory
         cudaDeviceSynchronize();
     }
@@ -265,9 +272,11 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
 
     cudaEventSynchronize(stop);
 
+#if 1 // xxxx3333
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("\t\tELAPSED %f seconds\n", milliseconds/1000.f);
+#endif
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)

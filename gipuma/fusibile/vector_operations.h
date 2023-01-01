@@ -30,6 +30,8 @@ static __device__ float4 operator/(float4 a, float k) {
                        0);
 }
 
+#define pow2(x) ((x)*(x))
+
 static __device__ float l2_float4 (float4 a) {
     return sqrtf( pow2 (a.x) +
              pow2 (a.y) +
