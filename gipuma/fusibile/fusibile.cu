@@ -9,7 +9,6 @@
 #include "globalstate.h"
 #include "algorithmparameters.h"
 #include "camera.h"
-#include "linestate.h"
 #include "config.h"
 
 #include <vector_types.h> // float4
@@ -90,8 +89,8 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
 
     const CameraParameters_cu &camParams = *(gs.cameras);
 
-    if (gs.lines[ref_camera].used_pixels[center]==1)
-        return;
+    // if (gs.lines[ref_camera].used_pixels[center]==1)
+    //     return;
 
     //printf("ref_camera is %d\n", ref_camera);
     const float4 normal = tex2D<float4> (gs.normal_depth_textures[ref_camera], p.x + 0.5f, p.y + 0.5f);

@@ -112,12 +112,6 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
 CameraParameters getCameraParameters (CameraParameters_cu &cpc, InputFiles inputFiles) {
     float scaleFactor = 1.0f;
 
-    // struct CameraParameters {
-    //     Mat_<float> K; //if K varies from camera to camera: K and f need to be stored within Camera
-    //     vector<Camera> cameras;
-    //     vector<int> viewSelectionSubset;
-    // };
-
     CameraParameters params;
     size_t numCameras = 2;
     params.cameras.resize ( numCameras );

@@ -343,7 +343,6 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     gs->cameras->cols = img_grayscale[0].cols;
     gs->cameras->rows = img_grayscale[0].rows;
 
-    gs->resize (img_grayscale.size());
     gs->pc->resize (img_grayscale[0].rows * img_grayscale[0].cols);
 
 	PointCloudList pc_list;
@@ -352,15 +351,6 @@ static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameter
     pc_list.size = 0;
     gs->pc->rows = img_grayscale[0].rows;
     gs->pc->cols = img_grayscale[0].cols;
-
-    // Resize lines
-    for (size_t i = 0; i<img_grayscale.size(); i++)
-    {
-        gs->lines[i].resize(img_grayscale[0].rows * img_grayscale[0].cols);
-        gs->lines[i].n = img_grayscale[0].rows * img_grayscale[0].cols;
-        gs->lines[i].s = img_grayscale[0].cols;
-        gs->lines[i].l = img_grayscale[0].cols;
-    }
 
     vector<Mat > img_color_float(img_grayscale.size());
     vector<Mat > color_images_list(img_grayscale.size());

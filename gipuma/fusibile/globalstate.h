@@ -1,8 +1,6 @@
 #pragma once
 
 #include "algorithmparameters.h"
-// #include "cameraparameters.h"
-#include "linestate.h"
 #include "managed.h"
 #include "point_cloud.h"
 #include "camera.h"
@@ -24,9 +22,6 @@
 class GlobalState : public Managed {
 public:
     CameraParameters_cu *cameras;
-    //ImageInfo iminfo;
-    LineState *lines;
-
     // xxxx3333 
     #if 1
     AlgorithmParameters *params;
@@ -37,14 +32,7 @@ public:
     cudaTextureObject_t color_images_textures[MAX_IMAGES];
     cudaTextureObject_t normal_depth_textures[MAX_IMAGES]; // first 3 values normal, fourth depth
 
-    void resize(int n)
-    {
-        printf("Resizing globalstate to %d\n", n);
-        cudaMallocManaged (&lines, sizeof(LineState) * n);
-    }
-
     ~GlobalState() {
-        cudaFree (lines);
     }
 
 };
