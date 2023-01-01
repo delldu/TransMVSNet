@@ -175,7 +175,7 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
     unsigned int count = pc_list.size;
     for (int y=0; y<gs.pc->rows; y++) {
         for (int x=0; x<gs.pc->cols; x++) {
-            Point_cu &p = gs.pc->points[x+y*gs.pc->cols];
+            Point_cu &p = gs.pc->points[x + y*gs.pc->cols];
             const float4 X = p.coord;
             const float4 normal = p.normal;
             float texture4[4];
