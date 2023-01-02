@@ -10,23 +10,22 @@
 #include "point_cloud_list.h"
 
 
-static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc) {
-    cout << "store 3D points to ply file" << endl;
+static void save_point_cloud (char* ply_filename, PointCloudList &pc) {
+    cout << "store 3D points to file " << ply_filename << endl;
 
-    FILE *outputPly;
-    outputPly=fopen(plyFilePath,"wb");
+    FILE *fp = fopen(ply_filename, "wb");
 
     /*write header*/
-    fprintf(outputPly, "ply\n");
-    fprintf(outputPly, "format binary_little_endian 1.0\n");
-    fprintf(outputPly, "element vertex %d\n",pc.size);
-    fprintf(outputPly, "property float x\n");
-    fprintf(outputPly, "property float y\n");
-    fprintf(outputPly, "property float z\n");
-    fprintf(outputPly, "property uchar red\n");
-    fprintf(outputPly, "property uchar green\n");
-    fprintf(outputPly, "property uchar blue\n");
-    fprintf(outputPly, "end_header\n");
+    fprintf(fp, "ply\n");
+    fprintf(fp, "format binary_little_endian 1.0\n");
+    fprintf(fp, "element vertex %d\n",pc.size);
+    fprintf(fp, "property float x\n");
+    fprintf(fp, "property float y\n");
+    fprintf(fp, "property float z\n");
+    fprintf(fp, "property uchar red\n");
+    fprintf(fp, "property uchar green\n");
+    fprintf(fp, "property uchar blue\n");
+    fprintf(fp, "end_header\n");
 
 
     //write data
@@ -47,13 +46,13 @@ static void storePlyFileBinaryPointCloud (char* plyFilePath, PointCloudList &pc)
 #pragma omp critical
         {
             /*myfile << X.x << " " << X.y << " " << X.z << " " << normal.x << " " << normal.y << " " << normal.z << " " << color << " " << color << " " << color << endl;*/
-            fwrite(&X.x,      sizeof(X.x), 1, outputPly);
-            fwrite(&X.y,      sizeof(X.y), 1, outputPly);
-            fwrite(&X.z,      sizeof(X.z), 1, outputPly);
-            fwrite(&color_r,  sizeof(char), 1, outputPly);
-            fwrite(&color_g,  sizeof(char), 1, outputPly);
-            fwrite(&color_b,  sizeof(char), 1, outputPly);
+            fwrite(&X.x,      sizeof(X.x), 1, fp);
+            fwrite(&X.y,      sizeof(X.y), 1, fp);
+            fwrite(&X.z,      sizeof(X.z), 1, fp);
+            fwrite(&color_r,  sizeof(char), 1, fp);
+            fwrite(&color_g,  sizeof(char), 1, fp);
+            fwrite(&color_b,  sizeof(char), 1, fp);
         }
     }
-    fclose(outputPly);
+    fclose(fp);
 }

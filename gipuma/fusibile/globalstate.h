@@ -22,11 +22,7 @@
 class GlobalState : public Managed {
 public:
     CameraParameters_cu *cameras;
-    // xxxx3333 
-    #if 1
     AlgorithmParameters *params;
-    #endif
-
     PointCloud *pc;
 
     cudaTextureObject_t color_images_textures[MAX_IMAGES];

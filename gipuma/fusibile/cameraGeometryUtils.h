@@ -4,7 +4,6 @@
  */
 
 #pragma once
-// #include "mathUtils.h"
 #include <limits>
 #include <signal.h>
 
@@ -103,11 +102,6 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
     }
 }
 
-/* get camera parameters (e.g. projection matrices) from file
- * Input:  inputFiles  - pathes to calibration files
- *         scaleFactor - if image was rescaled we need to adapt calibration matrix K accordingly
- * Output: camera parameters
- */
 CameraParameters getCameraParameters (CameraParameters_cu &cpc, vector<string> camera_filenames)
 {
     float scaleFactor = 1.0f;
@@ -119,7 +113,6 @@ CameraParameters getCameraParameters (CameraParameters_cu &cpc, vector<string> c
     for ( size_t i = 0; i < numCameras; i++ ) {
         read_camera_parameters(camera_filenames[i], params.cameras[i].P);
     }
-
 
     // decompose projection matrices into K, R and t
     vector<Mat_<float> > K ( numCameras );

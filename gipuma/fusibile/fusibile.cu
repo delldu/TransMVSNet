@@ -18,8 +18,6 @@
 #include "vector_operations.h"
 #include "point_cloud_list.h"
 
-#define SAVE_TEXTURE
-//#define SMOOTHNESS
 
 #define FORCEINLINE __forceinline__
 
@@ -29,14 +27,14 @@
  *         d - either disparity or depth value
  * Output: either depth or disparity value
  */
-__device__ FORCEINLINE float disparityDepthConversion_cu2 (
+__device__ FORCEINLINE float depth_convert_cu(
     const float &f, const Camera_cu &cam_ref, const Camera_cu &cam, const float &d )
 {
     float baseline = l2_float4(cam_ref.C4 - cam.C4);
     return f * baseline / d;
 }
 
-__device__ FORCEINLINE void get3Dpoint_cu (
+__device__ FORCEINLINE void get_3dpoint_cu(
     const Camera_cu &cam, const int2 &p, const float &depth,
     float4 * __restrict__ ptX)
 {
@@ -86,25 +84,13 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
         return;
 
     const int center = p.y*cols+p.x;
-
     const CameraParameters_cu &camParams = *(gs.cameras);
 
-    // if (gs.lines[ref_camera].used_pixels[center]==1)
-    //     return;
-
-    //printf("ref_camera is %d\n", ref_camera);
     const float4 normal = tex2D<float4> (gs.normal_depth_textures[ref_camera], p.x + 0.5f, p.y + 0.5f);
-    //printf("Normal is %f %f %f\nDepth is %f\n", normal.x, normal.y, normal.z, normal.w);
-    /*
-     * For each point of the reference camera compute the 3d position corresponding to the corresponding depth.
-     * Create a point only if the following conditions are fulfilled:
-     * - Projected depths of other cameras does not differ more than gs.params.depthThresh
-     * - Angle of normal does not differ more than gs.params.normalThresh
-     */
     float depth = normal.w;
 
     float4 X;
-    get3Dpoint_cu (camParams.cameras[ref_camera], p, depth, &X);
+    get_3dpoint_cu (camParams.cameras[ref_camera], p, depth, &X);
     float4 consistent_X = X;
     float4 consistent_normal = normal;
     float4 consistent_texture4 = tex2D<float4>(gs.color_images_textures[ref_camera], p.x+0.5f, p.y+0.5f);
@@ -127,12 +113,12 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
             tmp_normal_and_depth = tex2D<float4> (gs.normal_depth_textures[idxCurr], 
                 tmp_pt.x+0.5f, tmp_pt.y+0.5f);
 
-            const float depth_disp = disparityDepthConversion_cu2(
+            const float depth_disp = depth_convert_cu(
                 camParams.cameras[ref_camera].K[0], 
                 camParams.cameras[ref_camera], camParams.cameras[idxCurr],
                 depth );
             
-            const float tmp_depth_disp = disparityDepthConversion_cu2(
+            const float tmp_depth_disp = depth_convert_cu(
                 camParams.cameras[ref_camera].K[0],
                 camParams.cameras[ref_camera], camParams.cameras[idxCurr],
                 tmp_normal_and_depth.w );
@@ -143,7 +129,7 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
                 if (angle < gs.params->normalThresh) { // normalThresh == 0.52f
                     float4 tmp_X; // 3d point of consistent point on other view
                     int2 tmp_p = make_int2 ((int) tmp_pt.x, (int) tmp_pt.y);
-                    get3Dpoint_cu (camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w, &tmp_X);
+                    get_3dpoint_cu (camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w, &tmp_X);
 
                     consistent_X = consistent_X + tmp_X;
                     consistent_normal = consistent_normal + tmp_normal_and_depth;
@@ -161,11 +147,20 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     consistent_normal = consistent_normal / ((float) number_consistent + 1.0f);
     consistent_texture4 = consistent_texture4 / ((float) number_consistent + 1.0f);
 
-    if (number_consistent >= 3) { //gs.params->numConsistentThresh numConsistentThresh == 3
+    if (number_consistent >= gs.params->numConsistentThresh) { // numConsistentThresh == 3
         gs.pc->points[center].coord  = consistent_X;
         gs.pc->points[center].normal = consistent_normal;
         gs.pc->points[center].texture4 = consistent_texture4;
     }
+}
+
+void dump_gpu_memory()
+{
+    size_t avail, total, used;
+    cudaMemGetInfo( &avail, &total );
+
+    used = total - avail;
+    printf("Device memory used: %.2f MB\n", used/1000000.0f);    
 }
 
 /* Copy point cloud to global memory */
@@ -249,12 +244,7 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     printf("Grid size initrand is grid: %d-%d block: %d-%d\n", 
         grid_size_initrand.x, grid_size_initrand.y, block_size_initrand.x, block_size_initrand.y);
 
-    size_t avail;
-    size_t total;
-    cudaMemGetInfo( &avail, &total );
-    size_t used = total - avail;
-    printf("Device memory used: %.2fMB\n", used/1000000.0f);
-    // dump_gpu_memory();
+    dump_gpu_memory();
 
     //int shared_memory_size = sizeof(float)  * SHARED_SIZE ;
     printf("Fusing points\n");
@@ -272,11 +262,9 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
 
     cudaEventSynchronize(stop);
 
-#if 1 // xxxx3333
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("\t\tELAPSED %f seconds\n", milliseconds/1000.f);
-#endif
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
@@ -288,13 +276,4 @@ int runcuda(GlobalState &gs, PointCloudList &pc_list, int num_views)
     printf("Run cuda\n");
     fusibile_cu<float4>(gs, pc_list, num_views);
     return 0;
-}
-
-void dump_gpu_memory()
-{
-    size_t avail, total, used;
-    cudaMemGetInfo( &avail, &total );
-
-    used = total - avail;
-    printf("Device memory used: %.2f MB\n", used/1000000.0f);    
 }

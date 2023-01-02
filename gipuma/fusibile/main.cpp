@@ -57,15 +57,6 @@ struct InputData
     Mat_<Vec3f> normals;
 };
 
-int getCameraFromId(string id, vector<Camera> &cameras)
-{
-    for(size_t i =0; i< cameras.size(); i++) {
-        if(cameras[i].id.compare(id) == 0)
-            return i;
-    }
-    return -1;
-}
-
 static void get_subfolders(const char *dirname, vector<string> &subfolders)
 {
     DIR *dir;
@@ -74,17 +65,14 @@ static void get_subfolders(const char *dirname, vector<string> &subfolders)
     // Open directory stream
     dir = opendir (dirname);
     if (dir != NULL) {
-        // Print all files and directories within the directory
         while ((ent = readdir (dir)) != NULL) {
             char* name = ent->d_name;
             if(strcmp(name,".") == 0 || strcmp(ent->d_name,"..") == 0)
                 continue;
-            // printf ("dir %s/\n", name);
             subfolders.push_back(string(dirname) + "/" + string(name));
         }
         closedir (dir);
     } else {
-        // Could not open directory
         printf ("Cannot open directory %s\n", dirname);
         exit (EXIT_FAILURE);
     }
@@ -94,42 +82,6 @@ static void print_help ()
 {
     printf ( "fusibile input_folder\n" );
 }
-
-/* process command line arguments
- * Input: argc, argv - command line arguments
- * Output: inputFiles, outputFiles, parameters, gt_parameters, no_display - algorithm parameters
- */
-#if 0
-static int getParametersFromCommandLine ( int argc,
-                                          char** argv,
-                                          InputFiles &inputFiles)
-{
-    const char* images_input_folder_opt = "-images_folder";
-    const char* p_input_folder_opt = "-cameras_folder";
-    const char* camera_input_folder_opt = "-camera_folder";
-
-    //read in arguments
-    for ( int i = 1; i < argc; i++ )
-    {
-        if ( argv[i][0] != '-' )
-        {
-            inputFiles.img_filenames.push_back ( argv[i] );
-        } else if ( strcmp ( argv[i], images_input_folder_opt ) == 0 )
-            inputFiles.images_folder = argv[++i];
-        else if ( strcmp ( argv[i], p_input_folder_opt ) == 0 )
-            inputFiles.cameras_folder = argv[++i];
-        else if ( strcmp ( argv[i], camera_input_folder_opt ) == 0 )
-            inputFiles.camera_folder = argv[++i];
-        else
-        {
-            printf ( "Command-line parameter error: unknown option %s\n", argv[i] );
-            //return -1;
-        }
-    }
-
-    return 0;
-}
-#endif
 
 static void selectViews(CameraParameters &cameraParams)
 {
@@ -147,6 +99,7 @@ static void addImageToTextureFloatColor(vector<Mat> &imgs, cudaTextureObject_t t
     for (size_t i=0; i<imgs.size(); i++) {
         int rows = imgs[i].rows;
         int cols = imgs[i].cols;
+        
         // Create channel with floating point type
         cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float4>();
 
@@ -255,7 +208,6 @@ static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
     n_rows = image_gray[0].rows;
     n_cols = image_gray[0].cols;
 
-
     gs = new GlobalState;
     gs->cameras = new CameraParameters_cu;
     gs->pc = new PointCloud;
@@ -324,9 +276,8 @@ static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
 
     runcuda(*gs, pc_list, image_filenames.size());
 
-    snprintf(file_name, sizeof(file_name), "%s/final3d_model.ply", output_folder);
-    printf("Writing ply file %s\n", file_name);
-    storePlyFileBinaryPointCloud (file_name, pc_list);
+    snprintf(file_name, sizeof(file_name), "%s/3d_model.ply", output_folder);
+    save_point_cloud (file_name, pc_list);
 
     return 0;
 }
@@ -338,14 +289,8 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    // InputFiles inputFiles;
 	AlgorithmParameters* algParameters = new AlgorithmParameters;
 
-#if 0
-    int ret = getParametersFromCommandLine (argc, argv, inputFiles);
-    if ( ret != 0 )
-        return ret;
-#endif
     return runFusibile (argv[1], *algParameters);
 }
 

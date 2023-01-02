@@ -7,9 +7,7 @@ public:
     //threshold for consistency check
     float depthThresh;
     float normalThresh ;
-
-    // how many views need to be consistent?
-    int numConsistentThresh;
+    int numConsistentThresh; // how many views need to be consistent?
 
     AlgorithmParameters(){
         //threshold for consistency check

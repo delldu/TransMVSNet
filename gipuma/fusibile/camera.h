@@ -18,8 +18,7 @@ struct Camera {
 
     Mat_<float> t;
     Vec3f C3; // Camera Center (x, y, z),
-
-    string id;
+    // string id;
 };
 
 class Camera_cu : public Managed {
