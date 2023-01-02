@@ -2,38 +2,11 @@ import torchvision.utils as vutils
 import torch, random
 import cv2
 import os
-import json
 import numpy as np
 import pdb
 
 class NanError(Exception):
     pass
-
-
-def visualize_depth2(depth):
-    """Visualize the depth map with colormap.
-       Rescales the values so that depth_min and depth_max map to 0 and 1,
-       respectively.
-    """
-    depth = 1.0 / (depth + 1e-6)
-    invalid_mask = np.logical_or(np.isnan(depth), np.logical_not(np.isfinite(depth)))
-    depth_min = np.percentile(depth[np.logical_not(invalid_mask)], 5)
-    depth_max = np.percentile(depth[np.logical_not(invalid_mask)], 95)
-
-    # print(f"depth hypotheses 425mm to 935mm, real: {1.0/depth_max:.2f} -- {1.0/depth_min: .2f}")
-    # depth: 0.00120699, 0.00180233
-    # confidence: 1.03917617, 65.83818550
-
-    depth[depth < depth_min] = depth_min
-    depth[depth > depth_max] = depth_max
-    depth[invalid_mask] = depth_max
-
-    depth_scaled = (depth - depth_min) / (depth_max - depth_min)
-    depth_scaled_uint8 = np.uint8(depth_scaled * 255)
-    depth_color = cv2.applyColorMap(depth_scaled_uint8, cv2.COLORMAP_MAGMA)
-    depth_color[invalid_mask, :] = 0
-
-    return depth_color
 
 def visualize_depth(depth, depth_min=425.0, depth_max=935.0):
     """
@@ -69,26 +42,6 @@ def depth_normal(depth):
     normal_image = np.uint8(normal_image * 255.0) # (864, 1152, 3)
 
     return normal_image
-
-
-def save_model_vis(obj, save_dir: str, job_name: str, global_step: int, max_keep: int):
-    os.makedirs(os.path.join(save_dir, job_name), exist_ok=True)
-    record_file = os.path.join(save_dir, job_name, 'record')
-    cktp_file = os.path.join(save_dir, job_name, f'{global_step}.tar')
-    if not os.path.exists(record_file):
-        with open(record_file, 'w+') as f:
-            json.dump([], f)
-    with open(record_file, 'r') as f:
-        record = json.load(f)
-    record.append(global_step)
-    if len(record) > max_keep:
-        old = record[0]
-        record = record[1:]
-        os.remove(os.path.join(save_dir, job_name, f'{old}.tar'))
-    torch.save(obj, cktp_file)
-    with open(record_file, 'w') as f:
-        json.dump(record, f)
-
 
 
 # print arguments

@@ -36,7 +36,6 @@ cuda_add_executable(
     camera.h
     globalstate.h
     algorithmparameters.h
-    cameraparameters.h
     displayUtils.h
     fileIoUtils.h
     fusibile.cu

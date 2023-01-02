@@ -1,20 +1,13 @@
-import argparse, os, time, sys, gc, cv2, signal
+import argparse, os, time, gc, cv2
 import torch
-import torch.nn as nn
-import torch.nn.parallel
 import torch.backends.cudnn as cudnn
-import torch.nn.functional as F
 import numpy as np
 from torch.utils.data import DataLoader
 from datasets import find_dataset_def
 from models import *
 from utils import *
-from datasets.data_io import read_pfm, save_pfm
-from plyfile import PlyData, PlyElement
 from PIL import Image
 from gipuma import gipuma_filter
-from multiprocessing import Pool
-from functools import partial
 import pdb
 
 cudnn.benchmark = True
@@ -32,15 +25,12 @@ parser.add_argument('--display', action='store_true', help='display depth images
 parser.add_argument('--max_h', type=int, default=864, help='testing max h')
 parser.add_argument('--max_w', type=int, default=1152, help='testing max w')
 parser.add_argument('--fix_res', action='store_true', help='scene all using same res')
-parser.add_argument('--num_worker', type=int, default=4, help='depth_filer worker')
-parser.add_argument('--filter_method', type=str, default='normal', choices=["gipuma", "normal", "dynamic"], help="filter method")
-#filter
-# parser.add_argument('--conf', type=float, default=0.03, help='prob confidence')
+
 #filter by gimupa
 parser.add_argument('--fusibile_exe_path', type=str, default='./gipuma/fusibile/build/fusibile')
+
 # parse arguments and check
 args = parser.parse_args()
-print("argv:", sys.argv[1:])
 print_args(args)
 
 if args.testpath_single_scene:
@@ -96,7 +86,6 @@ def save_scene_depth(testlist):
     print("loading model {}".format(args.loadckpt))
     state_dict = torch.load(args.loadckpt, map_location=torch.device("cpu"))
     model.load_state_dict(state_dict['model'], strict=True)
-    # model = nn.DataParallel(model) # Multi ...
 
     model.cuda()
     model.eval()
@@ -135,29 +124,18 @@ def save_scene_depth(testlist):
                 conf_2 = cv2.resize(conf_2, (W,H))
                 conf_final = photo_confidence * conf_1 * conf_2
 
-                depth_est[conf_final < 0.01] = 0.0 # xxxx8888, ==> 'disp.dmb'
-                normal_color = depth_normal(depth_est) # xxxx8888 ==> normals.dmb
+                depth_est[conf_final < 0.01] = 0.0 # ==> 'disp.dmb'
+                normal_color = depth_normal(depth_est) # ==> normals.dmb
 
                 # save depth maps
                 depth_filename = os.path.join(args.outdir, filename.format('depth', '.pfm'))
                 os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                # save_pfm(depth_filename, depth_est)
                 depth_color = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
                 cv2.imwrite(os.path.join(args.outdir, filename.format('depth', '.png')), depth_color)
 
                 normal_filename = os.path.join(args.outdir, filename.format('normal', '.png'))
                 os.makedirs(normal_filename.rsplit('/', 1)[0], exist_ok=True)
                 cv2.imwrite(normal_filename, normal_color)
-
-                # # save confidence maps
-                # confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
-                # os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
-                # save_pfm(confidence_filename, conf_final)
-                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_1.png')),visualize_depth(conf_1))
-                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_2.png')),visualize_depth(conf_2))
-                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_3.png')), visualize_depth(photo_confidence))
-                # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_final.png')),
-                #     visualize_depth(conf_final, depth_min=0.0, depth_max=1.0))
 
                 # save cams, img
                 cam_filename = os.path.join(args.outdir, filename.format('camera', '.txt'))
@@ -188,5 +166,4 @@ if __name__ == '__main__':
     save_depth(testlist)
 
     # step2. filter saved depth maps with photometric confidence maps and geometric constraints
-    # xxxx8888
     gipuma_filter(testlist, args.outdir, args.fusibile_exe_path)

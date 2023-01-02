@@ -18,7 +18,6 @@ python test.py \
 --testlist=$TESTLIST \
 --loadckpt=$CKPT_FILE \
 --outdir=$OUTDIR \
---filter_method="gipuma" \
 --fusibile_exe_path=$FUSIBLE_PATH
 #--filter_method="normal"
 

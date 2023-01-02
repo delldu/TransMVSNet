@@ -14,14 +14,4 @@
 using namespace cv;
 using namespace std;
 
-#if 0
-//pathes to input images (camera images, ground truth, ...)
-struct InputFiles {
-    InputFiles () : images_folder ( "" ), cameras_folder ( "" ), camera_folder ( "" ) {}
-    vector<string> img_filenames; // input camera images (only filenames, path is set in images_folder), names can also be used for calibration data (e.g. for Strecha P, camera)
-    string images_folder; // path to camera input images
-    string cameras_folder; // path to camera projection matrix P (Strecha)
-    string camera_folder; // path to camera calibration matrix K (Strecha)
-};
-#endif
 

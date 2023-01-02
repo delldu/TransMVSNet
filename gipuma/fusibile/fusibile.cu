@@ -7,7 +7,7 @@
 #endif
 #include <stdio.h>
 #include "globalstate.h"
-#include "algorithmparameters.h"
+// #include "algorithmparameters.h"
 #include "camera.h"
 #include "config.h"
 
