@@ -109,15 +109,11 @@ static void print_help ()
  */
 static int getParametersFromCommandLine ( int argc,
                                           char** argv,
-                                          InputFiles &inputFiles,
-                                          AlgorithmParameters &parameters)
+                                          InputFiles &inputFiles)
 {
     const char* images_input_folder_opt = "-images_folder";
     const char* p_input_folder_opt = "-p_folder";
     const char* camera_input_folder_opt = "-camera_folder";
-    const char* disp_thresh_opt = "--disp_thresh=";
-    const char* normal_thresh_opt = "--normal_thresh=";
-    const char* num_consistent_opt = "--num_consistent=";
 
     //read in arguments
     for ( int i = 1; i < argc; i++ )
@@ -131,17 +127,6 @@ static int getParametersFromCommandLine ( int argc,
             inputFiles.p_folder = argv[++i];
         else if ( strcmp ( argv[i], camera_input_folder_opt ) == 0 )
             inputFiles.camera_folder = argv[++i];
-        else if ( strncmp ( argv[i], disp_thresh_opt, strlen (disp_thresh_opt) ) == 0 )
-            sscanf ( argv[i] + strlen (disp_thresh_opt), "%f", &parameters.depthThresh );
-        else if ( strncmp ( argv[i], normal_thresh_opt, strlen (normal_thresh_opt) ) == 0 ) {
-            float angle_degree;
-            sscanf ( argv[i] + strlen (normal_thresh_opt), "%f", &angle_degree );
-            parameters.normalThresh = angle_degree * M_PI / 180.0f;
-        }
-        else if ( strncmp ( argv[i], num_consistent_opt, strlen (num_consistent_opt) ) == 0 ) {
-            sscanf ( argv[i] + strlen (num_consistent_opt), "%d", &parameters.numConsistentThresh );
-            std::cout << "Debug: parameters.numConsistentThresh: " << parameters.numConsistentThresh << std::endl;
-        }
         else
         {
             printf ( "Command-line parameter error: unknown option %s\n", argv[i] );
@@ -398,7 +383,7 @@ int main(int argc, char **argv)
     InputFiles inputFiles;
 	AlgorithmParameters* algParameters = new AlgorithmParameters;
 
-    int ret = getParametersFromCommandLine ( argc, argv, inputFiles, *algParameters);
+    int ret = getParametersFromCommandLine (argc, argv, inputFiles);
     if ( ret != 0 )
         return ret;
 

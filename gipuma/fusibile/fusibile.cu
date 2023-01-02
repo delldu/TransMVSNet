@@ -138,9 +138,9 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
                 tmp_normal_and_depth.w );
             
             // First consistency check on depth
-            if (fabsf(depth_disp - tmp_depth_disp) < gs.params->depthThresh) {
+            if (fabsf(depth_disp - tmp_depth_disp) < gs.params->depthThresh) { // depthThresh == 0.25
                 float angle = getAngle_cu (tmp_normal_and_depth, normal); // extract normal
-                if (angle < gs.params->normalThresh) {
+                if (angle < gs.params->normalThresh) { // normalThresh == 0.52f
                     float4 tmp_X; // 3d point of consistent point on other view
                     int2 tmp_p = make_int2 ((int) tmp_pt.x, (int) tmp_pt.y);
                     get3Dpoint_cu (camParams.cameras[idxCurr], tmp_p, tmp_normal_and_depth.w, &tmp_X);
@@ -161,7 +161,7 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     consistent_normal = consistent_normal / ((float) number_consistent + 1.0f);
     consistent_texture4 = consistent_texture4 / ((float) number_consistent + 1.0f);
 
-    if (number_consistent >= gs.params->numConsistentThresh) {
+    if (number_consistent >= gs.params->numConsistentThresh) { // numConsistentThresh == 3
         gs.pc->points[center].coord  = consistent_X;
         gs.pc->points[center].normal = consistent_normal;
         gs.pc->points[center].texture4 = consistent_texture4;

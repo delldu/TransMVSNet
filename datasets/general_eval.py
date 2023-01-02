@@ -7,11 +7,10 @@ import pdb
 
 s_h, s_w = 0, 0
 class MVSDataset(Dataset):
-    def __init__(self, datapath, listfile, nviews=5, ndepths=192, interval_scale=1.06, **kwargs):
+    def __init__(self, datapath, listfile, nviews=5, ndepths=192, interval_scale=1.0, **kwargs):
         super(MVSDataset, self).__init__()
         # datapath = 'data/dtu_test'
         # listfile = ['scan1']
-        # mode = 'test'
         # kwargs = {'max_h': 864, 'max_w': 1152, 'fix_res': False}
 
         self.datapath = datapath
@@ -84,8 +83,8 @@ class MVSDataset(Dataset):
         intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ').reshape((3, 3))
         intrinsics[:2, :] /= 4.0
         # depth_min & depth_interval: line 11
-        depth_min = float(lines[11].split()[0])
-        depth_interval = float(lines[11].split()[1])
+        depth_min = float(lines[11].split()[0]) # ==> 425.0
+        depth_interval = float(lines[11].split()[1]) # ==> 2.5
 
         if len(lines[11].split()) >= 3: # False
             num_depth = lines[11].split()[2]

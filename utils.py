@@ -25,20 +25,8 @@ def recursive_apply(obj: Union[List, Dict], func):
         else:
             obj[k] = func(obj[k])
 
-def visualize_depth1(depth):
-    """Visualize the depth map with colormap.
-       Rescales the values so that depth_min and depth_max map to 0 and 1,
-       respectively.
-    """
-    # depth hypotheses 425mm to 935mm
-    depth = (depth - 425.0)/2.0
-    depth_scaled_uint8 = np.uint8((depth - 425.0)/2.0)
-    depth_color = cv2.applyColorMap(depth_scaled_uint8, cv2.COLORMAP_MAGMA)
 
-    return depth_color
-
-
-def visualize_depth(depth):
+def visualize_depth2(depth):
     """Visualize the depth map with colormap.
        Rescales the values so that depth_min and depth_max map to 0 and 1,
        respectively.
@@ -62,6 +50,41 @@ def visualize_depth(depth):
     depth_color[invalid_mask, :] = 0
 
     return depth_color
+
+def visualize_depth(depth, depth_min=425.0, depth_max=935.0):
+    """
+    depth hypotheses 425mm to 935mm
+    """
+    depth[depth < depth_min] = depth_min
+    depth[depth > depth_max] = depth_max
+        
+    depth_scaled = (depth - depth_min) / (depth_max - depth_min)
+    depth_color = np.uint8(depth_scaled * 255)
+
+    return depth_color
+
+def depth_normal(depth):
+    image_shape = np.shape(depth) # (864, 1152)
+    normal_image = np.ones_like(depth)
+    normal_image = np.reshape(normal_image, (image_shape[0], image_shape[1], 1))
+    normal_image = np.tile(normal_image, [1, 1, 3])
+    normal_image = normal_image / 1.732050808
+    # (Pdb) len(normal_image) -- 864
+    # (Pdb) normal_image[0].shape -- (1152, 3)
+    # (Pdb) normal_image[1].shape -- (1152, 3)
+    # (Pdb) normal_image[863].shape -- (1152, 3)
+
+    mask_image = np.squeeze(np.where(depth > 0, 1, 0))
+    mask_image = np.reshape(mask_image, (image_shape[0], image_shape[1], 1))
+    mask_image = np.tile(mask_image, [1, 1, 3])
+    mask_image = np.float32(mask_image)
+    # (Pdb) len(mask_image) -- 864
+    # (Pdb) mask_image[0].shape -- (1152, 3)
+
+    normal_image = np.multiply(normal_image, mask_image)
+    normal_image = np.uint8(normal_image * 255.0) # (864, 1152, 3)
+
+    return normal_image
 
 
 def save_model_vis(obj, save_dir: str, job_name: str, global_step: int, max_keep: int):

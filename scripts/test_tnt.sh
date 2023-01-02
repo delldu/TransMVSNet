@@ -15,7 +15,6 @@ python test.py \
 --interval_scale=1.0 \
 --numdepth=192 \
 --ndepths="48,32,8" \
---depth_inter_r="4,1,0.5" \
 --testpath=$TESTPATH  \
 --testlist=$TESTLIST \
 --outdir=$OUTDIR  \

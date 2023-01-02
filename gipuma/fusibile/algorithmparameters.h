@@ -8,15 +8,13 @@ public:
     float depthThresh;
     float normalThresh ;
 
-    //how many views need to be consistent? (for update: numConsistentThresh+1)
+    // how many views need to be consistent?
     int numConsistentThresh;
 
     AlgorithmParameters(){
         //threshold for consistency check
-        depthThresh = 0.5f;
+        depthThresh = 0.25f;
         normalThresh = 0.52f;
-
-        //how many views need to be consistent? (for update: numConsistentThresh+1)
-        numConsistentThresh = 2;
+        numConsistentThresh = 3;
     }
 };

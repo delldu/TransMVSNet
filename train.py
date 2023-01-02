@@ -26,10 +26,7 @@ parser.add_argument('--epochs', type=int, default=16, help='number of epochs to 
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--lrepochs', type=str, default="10,12,14:2", help='epoch ids to downscale lr and the downscale rate')
 parser.add_argument('--wd', type=float, default=0.0001, help='weight decay')
-parser.add_argument('--nviews', type=int, default=5, help='total number of views')
 parser.add_argument('--batch_size', type=int, default=1, help='train batch size')
-parser.add_argument('--numdepth', type=int, default=192, help='the number of depth values')
-parser.add_argument('--interval_scale', type=float, default=1.06, help='the number of depth values')
 parser.add_argument('--loadckpt', default=None, help='load a specific checkpoint')
 parser.add_argument('--logdir', default='./checkpoints', help='the directory to save checkpoints/logs')
 parser.add_argument('--resume', action='store_true', help='continue to train the model')
@@ -39,10 +36,7 @@ parser.add_argument('--eval_freq', type=int, default=1, help='eval freq')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed')
 parser.add_argument('--pin_m', action='store_true', help='data loader pin memory')
 parser.add_argument("--local_rank", type=int, default=0)
-parser.add_argument('--ndepths', type=str, default="48,32,8", help='ndepths')
-parser.add_argument('--depth_inter_r', type=str, default="4,2,1", help='depth_intervals_ratio')
 parser.add_argument('--dlossw', type=str, default="0.5,1.0,2.0", help='depth loss weight for different stage')
-parser.add_argument('--cr_base_chs', type=str, default="8,8,8", help='cost regularization base channels')
 parser.add_argument('--using_apex', action='store_true', help='using apex, need to install apex')
 parser.add_argument('--sync_bn', action='store_true',help='enabling apex sync BN.')
 parser.add_argument('--opt-level', type=str, default="O0")
@@ -323,9 +317,7 @@ if __name__ == '__main__':
         print_args(args)
 
     # model, optimizer
-    model = TransMVSNet(ndepths=[int(nd) for nd in args.ndepths.split(",") if nd],
-                          depth_interals_ratio=[float(d_i) for d_i in args.depth_inter_r.split(",") if d_i],
-                          cr_base_chs=[int(ch) for ch in args.cr_base_chs.split(",") if ch])
+    model = TransMVSNet()
     model.to(device)
     model_loss = trans_mvsnet_loss
 

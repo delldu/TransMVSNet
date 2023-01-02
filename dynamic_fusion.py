@@ -287,10 +287,6 @@ def worker(scan):
         scan_id = int(scan[4:])
         photo_threshold=0.3
         filter_depth(scan_folder, out_folder, pair_path, os.path.join(args.outdir, 'mvsnet_{:0>3}_l3.ply'.format(scan_id) ), photo_threshold)
-    if (args.test_dataset=='tnt'):
-        photo_threshold=args.photo_threshold
-        filter_depth(scan_folder, out_folder, pair_path, os.path.join(args.outdir, scan + '.ply'), photo_threshold)
-
 
 if __name__ == '__main__':
 

@@ -410,11 +410,12 @@ class FeatureNet(nn.Module):
         outputs = {}
         out = self.out1(intra_feat)
         outputs["stage1"] = out
-        intra_feat = F.interpolate(intra_feat, scale_factor=2, mode="nearest") + self.inner1(conv1)
+
+        intra_feat = F.interpolate(intra_feat, scale_factor=2.0, mode="nearest") + self.inner1(conv1)
         out = self.out2(intra_feat)
         outputs["stage2"] = out
 
-        intra_feat = F.interpolate(intra_feat, scale_factor=2, mode="nearest") + self.inner2(conv0)
+        intra_feat = F.interpolate(intra_feat, scale_factor=2.0, mode="nearest") + self.inner2(conv0)
         out = self.out3(intra_feat)
         outputs["stage3"] = out
 
@@ -472,19 +473,23 @@ class RefineNet(nn.Module):
 
 def depth_wta(p, depth_values):
     '''Winner take all.'''
-    wta_index_map = torch.argmax(p, dim=1, keepdim=True).type(torch.long)
-    wta_depth_map = torch.gather(depth_values, 1, wta_index_map).squeeze(1)
+
+    # pp p.size() -- [3, 48, 216, 288]
+    # depth_values.size() -- [3, 48, 216, 288]
+    wta_index_map = torch.argmax(p, dim=1, keepdim=True).type(torch.long) # [3, 1, 216, 288]
+    wta_depth_map = torch.gather(depth_values, 1, wta_index_map).squeeze(1) # [3, 216, 288]
+
     return wta_depth_map
 
 
-def info_entropy_loss(prob_volume, prob_volume_pre, mask):
-    # prob_colume should be processed after SoftMax
-    B,D,H,W = prob_volume.shape
-    LSM = nn.LogSoftmax(dim=1)
-    valid_points = torch.sum(mask, dim=[1,2])+1e-6
-    entropy = -1*(torch.sum(torch.mul(prob_volume, LSM(prob_volume_pre)), dim=1)).squeeze(1)
-    entropy_masked = torch.sum(torch.mul(mask, entropy), dim=[1,2])
-    return torch.mean(entropy_masked / valid_points)
+# def info_entropy_loss(prob_volume, prob_volume_pre, mask):
+#     # prob_colume should be processed after SoftMax
+#     B,D,H,W = prob_volume.shape
+#     LSM = nn.LogSoftmax(dim=1)
+#     valid_points = torch.sum(mask, dim=[1,2])+1e-6
+#     entropy = -1*(torch.sum(torch.mul(prob_volume, LSM(prob_volume_pre)), dim=1)).squeeze(1)
+#     entropy_masked = torch.sum(torch.mul(mask, entropy), dim=[1,2])
+#     return torch.mean(entropy_masked / valid_points)
 
 
 def entropy_loss(prob_volume, depth_gt, mask, depth_value, return_prob_map=False):
@@ -586,35 +591,45 @@ def focal_loss_bld(inputs, depth_gt_ms, mask_ms, depth_interval, **kwargs):
 
     return total_loss, depth_loss, epe, less1, less3
 
+# def get_cur_depth_range_samples(cur_depth, ndepth, depth_inteval_pixel, shape, max_depth=192.0, min_depth=0.0):
+#     cur_depth_min = (cur_depth - ndepth / 2 * depth_inteval_pixel)  # (B, H, W)
+#     cur_depth_max = (cur_depth + ndepth / 2 * depth_inteval_pixel)
+#     assert cur_depth.shape == torch.Size(shape), "cur_depth:{}, input shape:{}".format(cur_depth.shape, shape)
+#     new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)  # (B, H, W)
+#     depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=cur_depth.device,
+#                                                                   dtype=cur_depth.dtype,
+#                                                                   requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
 
-def get_cur_depth_range_samples(cur_depth, ndepth, depth_inteval_pixel, shape, max_depth=192.0, min_depth=0.0):
-    cur_depth_min = (cur_depth - ndepth / 2 * depth_inteval_pixel)  # (B, H, W)
-    cur_depth_max = (cur_depth + ndepth / 2 * depth_inteval_pixel)
-    assert cur_depth.shape == torch.Size(shape), "cur_depth:{}, input shape:{}".format(cur_depth.shape, shape)
-    new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)  # (B, H, W)
-    depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=cur_depth.device,
-                                                                  dtype=cur_depth.dtype,
-                                                                  requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
-
-    return depth_range_samples
+#     return depth_range_samples
 
 
-def get_depth_range_samples(cur_depth, ndepth, depth_inteval_pixel, device, dtype, shape,
-                           max_depth=192.0, min_depth=0.0, use_inverse_depth=False):
+def get_depth_samples(cur_depth, ndepth, depth_inteval_pixel, device, dtype, shape,
+                           max_depth=192.0, min_depth=0.0):
+    # cur_depth.size() -- [3, 192]
+    # ndepth -- 48
+    # depth_inteval_pixel = 10.54
+    # shape = [3, 864, 1152]
+    # max_depth = 931.15
+    # min_depth = 425.00
+
+    # print("---- cur_depth.dim(): ", cur_depth.dim()) ==> 2 | 3 | 3
     if cur_depth.dim() == 2:
-        cur_depth_min = cur_depth[:, 0]  # (B,)
+        cur_depth_min = cur_depth[:, 0]
         cur_depth_max = cur_depth[:, -1]
-        if use_inverse_depth is False:
-            new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)  # (B, )  Shouldn't cal this if we use inverse depth
-            depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=device, dtype=dtype,
-                                                                        requires_grad=False).reshape(1, -1) * new_interval.unsqueeze(1)) #(B, D)
-            depth_range_samples = depth_range_samples.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, shape[1], shape[2]) #(B, D, H, W)
-        else:
-            # When use inverse_depth for T&T
-            depth_range_samples = cur_depth.repeat(1, 1, shape[1], shape[2]) #(B, D, H, W)
-
+        new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)
+        depth_range_samples = cur_depth_min.unsqueeze(1) \
+            + (torch.arange(0, ndepth, device=device, dtype=dtype, \
+                requires_grad=False).reshape(1, -1) * new_interval.unsqueeze(1))
+        depth_range_samples = depth_range_samples.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, shape[1], shape[2])
     else:
-        depth_range_samples = get_cur_depth_range_samples(cur_depth, ndepth, depth_inteval_pixel, shape, max_depth, min_depth)
+        # depth_range_samples = get_cur_depth_range_samples(cur_depth, ndepth, depth_inteval_pixel, shape, max_depth, min_depth)
+        cur_depth_min = (cur_depth - ndepth / 2 * depth_inteval_pixel)  # (B, H, W)
+        cur_depth_max = (cur_depth + ndepth / 2 * depth_inteval_pixel)
+        assert cur_depth.shape == torch.Size(shape), "cur_depth:{}, input shape:{}".format(cur_depth.shape, shape)
+        new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)
+        depth_range_samples = cur_depth_min.unsqueeze(1) \
+            + (torch.arange(0, ndepth, device=device, dtype=dtype, \
+                 requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
 
     return depth_range_samples
 

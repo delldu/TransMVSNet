@@ -35,19 +35,27 @@ class DepthNet(nn.Module):
         super(DepthNet, self).__init__()
         self.pixel_wise_net = PixelwiseNet()
 
-    def forward(self, features, proj_matrix, depth_values, num_depth, cost_regularization, prob_volume_init=None, view_weights=None):
+    def forward(self, features, proj_matrix, depth_values, num_depth, cost_regularization, view_weights=None):
         """forward.
 
-        :param stage_idx: int, index of stage, [1, 2, 3], stage_1 corresponds to lowest image resolution
+        :param stage_i: int, index of stage, [1, 2, 3], stage_1 corresponds to lowest image resolution
         :param features: torch.Tensor, TODO: [B, C, H, W]
         :param proj_matrix: torch.Tensor,
         :param depth_values: torch.Tensor, TODO: [B, D, H, W]
         :param num_depth: int, Ndepth
         :param cost_regularization: nn.Module, regularization network
-        :param prob_volume_init:
         :param view_weights: pixel wise view weights for src views
         """
-        proj_matrix = torch.unbind(proj_matrix, 1)
+
+        # (Pdb) len(features) -- 5
+        # (Pdb) features[0].size() -- [3, 32, 216, 288]
+        # (Pdb) features[1].size() -- [3, 32, 216, 288]
+        # (Pdb) features[2].size() -- [3, 32, 216, 288]
+        # (Pdb) features[3].size() -- [3, 32, 216, 288]
+        # (Pdb) features[4].size() -- [3, 32, 216, 288]
+        # proj_matrix.size() -- [3, 5, 2, 4, 4]
+        proj_matrix = torch.unbind(proj_matrix, 1) # len(torch.unbind(proj_matrix, 1)) -- 5
+
         assert len(features) == len(proj_matrix), "Different number of images and projection matrices"
         assert depth_values.shape[1] == num_depth, "depth_values.shape[1]:{}  num_depth:{}".format(depth_values.shapep[1], num_depth)
 
@@ -76,13 +84,8 @@ class DepthNet(nn.Module):
             else:
                 view_weight = view_weights[:, i:i+1]
 
-            if self.training:
-                similarity_sum = similarity_sum + similarity * view_weight.unsqueeze(1) # [B, 1, D, H, W]
-                pixel_wise_weight_sum = pixel_wise_weight_sum + view_weight.unsqueeze(1) # [B, 1, 1, H, W]
-            else:
-                # TODO: this is only a temporal solution to save memory, better way?
-                similarity_sum += similarity * view_weight.unsqueeze(1)
-                pixel_wise_weight_sum += view_weight.unsqueeze(1)
+            similarity_sum += similarity * view_weight.unsqueeze(1) # [B, 1, D, H, W]
+            pixel_wise_weight_sum += view_weight.unsqueeze(1) # [B, 1, 1, H, W]
 
             del warped_volume
         # aggregate multiple similarity across all the source views
@@ -91,9 +94,6 @@ class DepthNet(nn.Module):
         # step 3. cost volume regularization
         cost_reg = cost_regularization(similarity)
         prob_volume_pre = cost_reg.squeeze(1)
-
-        if prob_volume_init is not None:
-            prob_volume_pre += prob_volume_init
 
         prob_volume = torch.exp(F.log_softmax(prob_volume_pre, dim=1))
         depth = depth_wta(prob_volume, depth_values=depth_values)
@@ -118,50 +118,51 @@ class TransMVSNet(nn.Module):
         self.depth_interals_ratio = depth_interals_ratio
         self.cr_base_chs = cr_base_chs
         self.num_stage = len(ndepths)
-        print("**********netphs:{}, depth_intervals_ratio:{},  chs:{}************".format(ndepths,
-            depth_interals_ratio, self.cr_base_chs))
 
-        self.stage_infos = {
-                "stage1":{
-                    "scale": 4.0,
-                    },
-                "stage2": {
-                    "scale": 2.0,
-                    },
-                "stage3": {
-                    "scale": 1.0,
-                    }
-                }
+        self.stage_scales = {
+            "stage1": 4.0,
+            "stage2": 2.0,
+            "stage3": 1.0
+        }
 
         self.feature = FeatureNet(base_channels=8)
         self.FMT_with_pathway = FMT_with_pathway()
-        self.cost_regularization = nn.ModuleList([CostRegNet(in_channels=1, \
-                base_channels=self.cr_base_chs[i])
-                for i in range(self.num_stage)])
+        self.cost_regularization = nn.ModuleList([ \
+                CostRegNet(in_channels=1, base_channels=self.cr_base_chs[i]) \
+                    for i in range(self.num_stage)])
         self.DepthNet = DepthNet()
 
     def forward(self, imgs, proj_matrix, depth_values):
-        depth_min = float(depth_values[0, 0].cpu().numpy())
-        depth_max = float(depth_values[0, -1].cpu().numpy())
-        depth_interval = (depth_max - depth_min) / depth_values.size(1)
+        # imgs.size() -- [3, 5, 3, 864, 1152]
+        # proj_matrix.keys() -- dict_keys(['stage1', 'stage2', 'stage3'])
+        # depth_values.size() -- [3, 192]
+        S, B, C, H, W = imgs.size() # S -- Stage
+
+        depth_min = float(depth_values[0, 0].cpu().numpy()) # 425.00
+        depth_max = float(depth_values[0, -1].cpu().numpy()) # 931.45
+        depth_interval = (depth_max - depth_min) / depth_values.size(1) # 2.6362
 
         # step 1. feature extraction
         features = []
+        # imgs.size() -- [3, 5, 3, 864, 1152]
         for nview_idx in range(imgs.size(1)):
             img = imgs[:, nview_idx]
             features.append(self.feature(img))
+        # img.size() -- [3, 3, 864, 1152]
 
         features = self.FMT_with_pathway(features)
 
         outputs = {}
         depth, cur_depth = None, None
         view_weights = None
-        for stage_idx in range(self.num_stage): # 3
-            features_stage = [feat["stage{}".format(stage_idx + 1)] for feat in features]
-            proj_matrices_stage = proj_matrix["stage{}".format(stage_idx + 1)]
-            stage_scale = self.stage_infos["stage{}".format(stage_idx + 1)]["scale"]
 
-            if depth is not None:
+        for stage_i in range(self.num_stage): # 3
+            stage_n = "stage{}".format(stage_i + 1)
+            state_features = [feat[stage_n] for feat in features]
+            state_proj_matrix = proj_matrix[stage_n]
+            stage_scale = self.stage_scales[stage_n]
+
+            if depth is not None: # stage 2/3
                 cur_depth = depth.detach()
                 cur_depth = F.interpolate(cur_depth.unsqueeze(1),
                         [img.shape[2], img.shape[3]], mode='bilinear',
@@ -170,40 +171,47 @@ class TransMVSNet(nn.Module):
                 cur_depth = depth_values
 
             # [B, D, H, W]
-            depth_range_samples = get_depth_range_samples(cur_depth=cur_depth,
-                    ndepth=self.ndepths[stage_idx],
-                    depth_inteval_pixel=self.depth_interals_ratio[stage_idx] * depth_interval,
+            depth_samples = get_depth_samples(cur_depth=cur_depth,
+                    ndepth=self.ndepths[stage_i],
+                    depth_inteval_pixel=self.depth_interals_ratio[stage_i] * depth_interval,
                     dtype=img[0].dtype,
                     device=img[0].device,
                     shape=[img.shape[0], img.shape[2], img.shape[3]],
                     max_depth=depth_max,
-                    min_depth=depth_min,
-                    use_inverse_depth=False)
+                    min_depth=depth_min)
+            # depth_samples.size() -- [3, 48, 864, 1152]
 
-            if stage_idx + 1 > 1: # for stage 2 and 3
+            if stage_i + 1 > 1: # for stage 2 and 3
                 view_weights = F.interpolate(view_weights, scale_factor=2, mode="nearest")
 
+            # self.ndepths=[48, 32, 8]
+            # stage_scale -- 4.0, 2.0, 1.0
             if view_weights == None: # stage 1
                 outputs_stage, view_weights = self.DepthNet(
-                        features_stage,
-                        proj_matrices_stage,
-                        depth_values=F.interpolate(depth_range_samples.unsqueeze(1), [self.ndepths[stage_idx], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)], mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
-                        num_depth=self.ndepths[stage_idx],
-                        cost_regularization=self.cost_regularization[stage_idx], view_weights=view_weights)
+                        state_features,
+                        state_proj_matrix,
+                        depth_values=F.interpolate(depth_samples.unsqueeze(1), 
+                            [self.ndepths[stage_i], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)],
+                             mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
+                        num_depth=self.ndepths[stage_i],
+                        cost_regularization=self.cost_regularization[stage_i], view_weights=view_weights)
             else:
                 outputs_stage = self.DepthNet(
-                        features_stage,
-                        proj_matrices_stage,
-                        depth_values=F.interpolate(depth_range_samples.unsqueeze(1), [self.ndepths[stage_idx], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)], mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
-                        num_depth=self.ndepths[stage_idx],
-                        cost_regularization=self.cost_regularization[stage_idx], view_weights=view_weights)
+                        state_features,
+                        state_proj_matrix,
+                        depth_values=F.interpolate(depth_samples.unsqueeze(1), 
+                            [self.ndepths[stage_i], img.shape[2]//int(stage_scale), img.shape[3]//int(stage_scale)],
+                             mode='trilinear', align_corners=Align_Corners_Range).squeeze(1),
+                        num_depth=self.ndepths[stage_i],
+                        cost_regularization=self.cost_regularization[stage_i], view_weights=view_weights)
 
             wta_index_map = torch.argmax(outputs_stage['prob_volume'], dim=1, keepdim=True).type(torch.long)
             depth = torch.gather(outputs_stage['depth_values'], 1, wta_index_map).squeeze(1)
+
             # depth hypotheses 425mm to 935mm
             outputs_stage['depth'] = depth.clamp(425.0, 935.0)
 
-            outputs["stage{}".format(stage_idx + 1)] = outputs_stage
+            outputs[stage_n] = outputs_stage
             outputs.update(outputs_stage)
 
         return outputs

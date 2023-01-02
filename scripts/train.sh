@@ -20,6 +20,5 @@ python -m torch.distributed.launch --nproc_per_node=$NGPUS train.py \
 	--ndepths="48,32,8" \
 	--nviews=5 \
 	--wd=0.0001 \
-	--depth_inter_r="4.0,1.0,0.5" \
 	--lrepochs="6,8,12:2" \
 	--dlossw="1.0,1.0,1.0" | tee -a $LOG_DIR/log.txt
