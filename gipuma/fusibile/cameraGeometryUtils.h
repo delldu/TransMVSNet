@@ -96,12 +96,11 @@ void copyOpencvVecToFloat4 ( Vec3f &v, float4 *a)
 
 void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
 {
-
-    for (int pj=0; pj<m.rows ; pj++)
-        for (int pi=0; pi<m.cols ; pi++)
-        {
+    for (int pj = 0; pj < m.rows; pj++) {
+        for (int pi = 0; pi < m.cols; pi++) {
             (*a)[pi+pj*m.cols] = m(pj,pi);
         }
+    }
 }
 
 /* get camera parameters (e.g. projection matrices) from file
@@ -109,27 +108,18 @@ void copyOpencvMatToFloatArray ( Mat_<float> &m, float **a)
  *         scaleFactor - if image was rescaled we need to adapt calibration matrix K accordingly
  * Output: camera parameters
  */
-CameraParameters getCameraParameters (CameraParameters_cu &cpc, InputFiles inputFiles) {
+CameraParameters getCameraParameters (CameraParameters_cu &cpc, vector<string> camera_filenames)
+{
     float scaleFactor = 1.0f;
+    size_t numCameras = camera_filenames.size();
 
     CameraParameters params;
-    size_t numCameras = 2;
     params.cameras.resize ( numCameras );
-    //get projection matrices
 
-    //load projection matrix from file (e.g. for Strecha)
-    cout << "P folder is " << inputFiles.p_folder << endl;
-    if ( !inputFiles.p_folder.empty () ) {
-        numCameras = inputFiles.img_filenames.size ();
-        params.cameras.resize ( numCameras );
-        for ( size_t i = 0; i < numCameras; i++ ) {
-            readPFileStrechaPmvs ( inputFiles.p_folder + inputFiles.img_filenames[i] + ".P",params.cameras[i].P );
-            unsigned found = inputFiles.img_filenames[i].find_last_of ( "." );
-            params.cameras[i].id = inputFiles.img_filenames[i].substr ( 0,found ).c_str ();
-        }
-
+    for ( size_t i = 0; i < numCameras; i++ ) {
+        read_camera_parameters(camera_filenames[i], params.cameras[i].P);
     }
-    cout << "numCameras is " << numCameras << endl;
+
 
     // decompose projection matrices into K, R and t
     vector<Mat_<float> > K ( numCameras );

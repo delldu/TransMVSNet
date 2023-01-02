@@ -48,7 +48,7 @@ if args.testpath_single_scene:
 
 
 def write_cam(file, cam):
-    # file = 'outputs/dtu_testing/scan1/cams/00000000_cam.txt'
+    # file = 'outputs/dtu_testing/scan1/cams/00000000.txt'
     # cam = array([[[ 9.7026300e-01,  7.4798302e-03,  2.4193899e-01, -1.9102000e+02],
     #         [-1.4742900e-02,  9.9949300e-01,  2.8223399e-02,  3.2883201e+00],
     #         [-2.4160500e-01, -3.0951001e-02,  9.6988100e-01,  2.2540100e+01],
@@ -59,21 +59,22 @@ def write_cam(file, cam):
     #         [ 0.0000000e+00,  0.0000000e+00,  1.0000000e+00,  0.0000000e+00],
     #         [ 0.0000000e+00,  0.0000000e+00,  0.0000000e+00,  0.0000000e+00]]],
     #       dtype=float32)
+    intrinsic, extrinsic = cam[1][:3, :3], cam[0]
+    intrinsic_new = np.zeros((4, 4))
+    intrinsic_new[:3, :3] = intrinsic
+    intrinsic = intrinsic_new
+
+    projection_matrix = np.matmul(intrinsic, extrinsic)
+    projection_matrix = projection_matrix[0:3][:] # (3, 4)
+
     f = open(file, "w")
-    f.write('extrinsic\n')
-    for i in range(0, 4):
+    for i in range(0, 3):
         for j in range(0, 4):
-            f.write(str(cam[0][i][j]) + ' ')
+            f.write(str(projection_matrix[i][j]) + ' ')
         f.write('\n')
     f.write('\n')
-
-    f.write('intrinsic\n')
-    for i in range(0, 3):
-        for j in range(0, 3):
-            f.write(str(cam[1][i][j]) + ' ')
-        f.write('\n')
-    f.write('\n' + str(cam[1][3][0]) + ' ' + str(cam[1][3][1]) + ' ' + str(cam[1][3][2]) + ' ' + str(cam[1][3][3]) + '\n')
     f.close()
+
 
 def save_depth(testlist):
     for scene in testlist:
@@ -134,38 +135,39 @@ def save_scene_depth(testlist):
                 conf_2 = cv2.resize(conf_2, (W,H))
                 conf_final = photo_confidence * conf_1 * conf_2
 
-                # depth_est[conf_final < 0.01] = 0.0 # xxxx8888, ==> 'disp.dmb'
-                # normal_est = depth_normal(depth_est) # xxxx8888 ==> normals.dmb
+                depth_est[conf_final < 0.01] = 0.0 # xxxx8888, ==> 'disp.dmb'
+                normal_color = depth_normal(depth_est) # xxxx8888 ==> normals.dmb
 
                 # save depth maps
-                depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
+                depth_filename = os.path.join(args.outdir, filename.format('depth', '.pfm'))
                 os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                # depth hypotheses 425mm to 935mm
-                # depth_est = depth_est.clamp(425.0, 935.0)
-                save_pfm(depth_filename, depth_est)
+                # save_pfm(depth_filename, depth_est)
                 depth_color = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
-                cv2.imwrite(os.path.join(args.outdir, filename.format('depth_est', '.png')), depth_color)
+                cv2.imwrite(os.path.join(args.outdir, filename.format('depth', '.png')), depth_color)
 
-                # save confidence maps
-                confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
-                os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
-                save_pfm(confidence_filename, conf_final)
-                # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_1.png')),visualize_depth(conf_1))
-                # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_2.png')),visualize_depth(conf_2))
-                # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_3.png')), visualize_depth(photo_confidence))
-                cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_final.png')),
-                    visualize_depth(conf_final, depth_min=0.0, depth_max=1.0))
+                normal_filename = os.path.join(args.outdir, filename.format('normal', '.png'))
+                os.makedirs(normal_filename.rsplit('/', 1)[0], exist_ok=True)
+                cv2.imwrite(normal_filename, normal_color)
+
+                # # save confidence maps
+                # confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
+                # os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
+                # save_pfm(confidence_filename, conf_final)
+                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_1.png')),visualize_depth(conf_1))
+                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_2.png')),visualize_depth(conf_2))
+                # # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_3.png')), visualize_depth(photo_confidence))
+                # cv2.imwrite(os.path.join(args.outdir, filename.format('confidence', '_final.png')),
+                #     visualize_depth(conf_final, depth_min=0.0, depth_max=1.0))
 
                 # save cams, img
-                cam_filename = os.path.join(args.outdir, filename.format('cams', '_cam.txt'))
+                cam_filename = os.path.join(args.outdir, filename.format('camera', '.txt'))
                 os.makedirs(cam_filename.rsplit('/', 1)[0], exist_ok=True)
                 write_cam(cam_filename, cam) # cam.shape -- (2, 4, 4)
 
-                img_filename = os.path.join(args.outdir, filename.format('images', '.jpg'))
+                img_filename = os.path.join(args.outdir, filename.format('image', '.png'))
                 os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
                 img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
-                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                # img_bgr.shape -- (864, 1152, 3), dtype=uint8
+                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR) # img_bgr.shape -- (864, 1152, 3), dtype=uint8
                 cv2.imwrite(img_filename, img_bgr)
 
     torch.cuda.empty_cache()
@@ -186,4 +188,5 @@ if __name__ == '__main__':
     save_depth(testlist)
 
     # step2. filter saved depth maps with photometric confidence maps and geometric constraints
+    # xxxx8888
     gipuma_filter(testlist, args.outdir, args.fusibile_exe_path)

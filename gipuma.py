@@ -205,14 +205,13 @@ def probability_filter(dense_folder, prob_threshold = 0.01):
         cv2.imwrite(os.path.join(dense_folder, "depth_est", image_prefix + '_prob_filtered.png'), depth_color)
 
 
-def depth_map_fusion(point_folder, fusibile_exe_path):
-    cam_folder = os.path.join(point_folder, 'cams')
-    image_folder = os.path.join(point_folder, 'images')
+def depth_map_fusion(mvsout_folder, fusibile_exe_path):
+    cams_folder = os.path.join(mvsout_folder, 'cams')
+    image_folder = os.path.join(mvsout_folder, 'images')
 
-    cmd = fusibile_exe_path
-    cmd = cmd + ' -input_folder ' + point_folder + '/'
-    cmd = cmd + ' -p_folder ' + cam_folder + '/'
-    cmd = cmd + ' -images_folder ' + image_folder + '/'
+    cmd = fusibile_exe_path + " " + mvsout_folder
+    # cmd = cmd + ' -p_folder ' + cams_folder + '/'
+    # cmd = cmd + ' -images_folder ' + image_folder + '/'
     # xxxx8888
     # gipuma/fusibile/build/fusibile
     #  -input_folder outputs/dtu_testing/scan1/points/ 
@@ -221,8 +220,6 @@ def depth_map_fusion(point_folder, fusibile_exe_path):
 
     print(cmd)
     os.system(cmd)
-
-    return
 
 
 def gipuma_filter(testlist, outdir, fusibile_exe_path):
@@ -236,21 +233,21 @@ def gipuma_filter(testlist, outdir, fusibile_exe_path):
 
         out_folder = os.path.join(outdir, scan)
 
-        point_folder = os.path.join(out_folder, 'points')
-        if not os.path.isdir(point_folder):
-            os.mkdir(point_folder)
+        # point_folder = os.path.join(out_folder, 'points')
+        # if not os.path.isdir(point_folder):
+        #     os.mkdir(point_folder)
 
-        # probability filter, xxxx8888
-        print('filter depth map with probability map')
-        probability_filter(out_folder, prob_threshold)
-        # ==> 'outputs/dtu_testing/scan1/depth_est/00000000_prob_filtered.pfm'
+        # # probability filter, xxxx8888
+        # print('filter depth map with probability map')
+        # probability_filter(out_folder, prob_threshold)
+        # # ==> 'outputs/dtu_testing/scan1/depth_est/00000000_prob_filtered.pfm'
 
-        # # convert to gipuma format, xxxx8888
-        print('Convert mvsnet output to gipuma input')
-        mvsnet_to_gipuma(out_folder, point_folder)
+        # # # convert to gipuma format, xxxx8888
+        # print('Convert mvsnet output to gipuma input')
+        # mvsnet_to_gipuma(out_folder, point_folder)
 
-        # depth map fusion with gipuma
-        print('Run depth map fusion & filter')
+        # # depth map fusion with gipuma
+        # print('Run depth map fusion & filter')
 
         # xxxx8888
-        depth_map_fusion(point_folder, fusibile_exe_path)
+        depth_map_fusion(out_folder, fusibile_exe_path)

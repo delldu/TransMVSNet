@@ -49,14 +49,16 @@
 #include "displayUtils.h"
 #include "point_cloud_list.h"
 
-struct InputData{
+struct InputData
+{
     string path;
     Mat_<float> depthMap;
     Mat_<Vec3b> inputImage;
     Mat_<Vec3f> normals;
 };
 
-int getCameraFromId(string id, vector<Camera> &cameras){
+int getCameraFromId(string id, vector<Camera> &cameras)
+{
     for(size_t i =0; i< cameras.size(); i++) {
         if(cameras[i].id.compare(id) == 0)
             return i;
@@ -78,7 +80,7 @@ static void get_subfolders(const char *dirname, vector<string> &subfolders)
             if(strcmp(name,".") == 0 || strcmp(ent->d_name,"..") == 0)
                 continue;
             // printf ("dir %s/\n", name);
-            subfolders.push_back(string(name));
+            subfolders.push_back(string(dirname) + "/" + string(name));
         }
         closedir (dir);
     } else {
@@ -90,29 +92,20 @@ static void get_subfolders(const char *dirname, vector<string> &subfolders)
 
 static void print_help ()
 {
-    // # gipuma/fusibile/build/fusibile
-    // #  -input_folder outputs/dtu_testing/scan1/points/ 
-    // #  -p_folder outputs/dtu_testing/scan1/points/cams/
-    // #  -images_folder outputs/dtu_testing/scan1/points/images
-    // #  --depth_min=0.001
-    // #  --depth_max=100000
-    // #  --normal_thresh=360 --disp_thresh=0.25
-    // #  --num_consistent=3.0
-
-
-    printf ( "\nfusibile\n" );
+    printf ( "fusibile input_folder\n" );
 }
 
 /* process command line arguments
  * Input: argc, argv - command line arguments
  * Output: inputFiles, outputFiles, parameters, gt_parameters, no_display - algorithm parameters
  */
+#if 0
 static int getParametersFromCommandLine ( int argc,
                                           char** argv,
                                           InputFiles &inputFiles)
 {
     const char* images_input_folder_opt = "-images_folder";
-    const char* p_input_folder_opt = "-p_folder";
+    const char* p_input_folder_opt = "-cameras_folder";
     const char* camera_input_folder_opt = "-camera_folder";
 
     //read in arguments
@@ -124,7 +117,7 @@ static int getParametersFromCommandLine ( int argc,
         } else if ( strcmp ( argv[i], images_input_folder_opt ) == 0 )
             inputFiles.images_folder = argv[++i];
         else if ( strcmp ( argv[i], p_input_folder_opt ) == 0 )
-            inputFiles.p_folder = argv[++i];
+            inputFiles.cameras_folder = argv[++i];
         else if ( strcmp ( argv[i], camera_input_folder_opt ) == 0 )
             inputFiles.camera_folder = argv[++i];
         else
@@ -136,21 +129,22 @@ static int getParametersFromCommandLine ( int argc,
 
     return 0;
 }
+#endif
 
-static void selectViews ( CameraParameters &cameraParams) {
+static void selectViews(CameraParameters &cameraParams)
+{
+    size_t i;
     vector<Camera> cameras = cameraParams.cameras;
-    cameraParams.viewSelectionSubset.clear ();
 
-    for ( size_t i = 0; i < cameras.size (); i++ ) {
-         //select all views, dont perform selection
-        cameraParams.viewSelectionSubset.push_back ( i );
+    cameraParams.viewSelectionSubset.clear();
+    for (i = 0; i < cameras.size(); i++) {
+        cameraParams.viewSelectionSubset.push_back(i);
     }
 }
 
-static void addImageToTextureFloatColor (vector<Mat> &imgs, cudaTextureObject_t texs[])
+static void addImageToTextureFloatColor(vector<Mat> &imgs, cudaTextureObject_t texs[])
 {
-    for (size_t i=0; i<imgs.size(); i++)
-    {
+    for (size_t i=0; i<imgs.size(); i++) {
         int rows = imgs[i].rows;
         int cols = imgs[i].cols;
         // Create channel with floating point type
@@ -189,206 +183,169 @@ static void addImageToTextureFloatColor (vector<Mat> &imgs, cudaTextureObject_t 
     }
 }
 
-static int runFusibile (int argc, char **argv, AlgorithmParameters &algParameters)
+static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
 {
-    InputFiles inputFiles;
-    string ext = ".png";
+    GlobalState *gs;
+    size_t i, n_rows, n_cols;
+    char output_folder[256], file_name[512];
 
-    string results_folder = "results/";
+    vector<string> image_filenames;
+    vector<string> camera_filenames;
+    vector<string> depth_filenames;
+    vector<string> normal_filenames;
 
-    const char* results_folder_opt = "-input_folder";
-    const char* p_input_folder_opt = "-p_folder";
-    const char* images_input_folder_opt = "-images_folder";
-    for ( int i = 1; i < argc; i++ )
-    {
-        if ( strcmp ( argv[i], results_folder_opt ) == 0 ){
-            results_folder = argv[++i]; // outputs/dtu_testing/scan1/points/
-            cout << "input folder is " << results_folder << endl;
-        } else if ( strcmp ( argv[i], p_input_folder_opt ) == 0 ){
-            inputFiles.p_folder = argv[++i];
-        } else if ( strcmp ( argv[i], images_input_folder_opt ) == 0 ){
-            inputFiles.images_folder = argv[++i];
-        }
-    }
-
-    cout <<"image folder is " << inputFiles.images_folder << endl;
-    cout <<"p folder is " << inputFiles.p_folder << endl;
-
-
-    char output_folder[256];
-    sprintf(output_folder, "%s/consistencyCheck/",results_folder.c_str());
+    sprintf(output_folder, "%s/point/", input_folder);
 #if defined(_WIN32)
     _mkdir(output_folder);
 #else
     mkdir(output_folder, 0777);
 #endif
 
-    vector<string> subfolders;
-    get_subfolders(results_folder.c_str(), subfolders);
-    // results_folder -- outputs/dtu_testing/scan1/points/
-    std::sort(subfolders.begin(), subfolders.end());
-
-    map< int,string> consideredIds;
-    for(size_t i=0;i<subfolders.size();i++) {
-        //make sure that it has the right format (DATE_TIME_INDEX)
-        size_t n = std::count(subfolders[i].begin(), subfolders[i].end(), '_');
-        if(n < 2)
-            continue;
-        if (subfolders[i][0] != '2')
-            continue;
-
-        unsigned posFirst = subfolders[i].find_first_of("_") +1;
-        unsigned found = subfolders[i].substr(posFirst).find_first_of("_") + posFirst +1;
-        string id_string = subfolders[i].substr(found);
-
-        consideredIds.insert(pair<int,string>(i, id_string));
-
-        if( access( (inputFiles.images_folder + id_string + ".png").c_str(), R_OK ) != -1 )
-            inputFiles.img_filenames.push_back((id_string + ".png"));
-        else if( access( (inputFiles.images_folder + id_string + ".jpg").c_str(), R_OK ) != -1 )
-            inputFiles.img_filenames.push_back((id_string + ".jpg"));
-        else if( access( (inputFiles.images_folder + id_string + ".ppm").c_str(), R_OK ) != -1 )
-            inputFiles.img_filenames.push_back((id_string + ".ppm"));
+    snprintf(file_name, sizeof(file_name), "%s/image", input_folder);
+    get_subfolders(file_name, image_filenames);
+    if (image_filenames.size() < 1) {
+        std::cout << "Error: NOT find images under folder '" << file_name << "'" << std::endl;
+        return -1;
     }
-    size_t numImages = inputFiles.img_filenames.size ();
-    cout << "numImages is " << numImages << endl;
-    cout << "img_filenames is " << inputFiles.img_filenames.size() << endl;
+    std::sort(image_filenames.begin(), image_filenames.end());
 
-    vector<Mat_<Vec3b> > img_color; // imgLeft_color, imgRight_color;
-    vector<Mat_<uint8_t> > img_grayscale;
-    for ( size_t i = 0; i < numImages; i++ ) {
-        img_grayscale.push_back ( imread ( ( inputFiles.images_folder + inputFiles.img_filenames[i] ), IMREAD_GRAYSCALE ) );
-        img_color.push_back ( imread ( ( inputFiles.images_folder + inputFiles.img_filenames[i] ), IMREAD_COLOR ) );
+    snprintf(file_name, sizeof(file_name), "%s/camera", input_folder);
+    get_subfolders(file_name, camera_filenames);
+    if (camera_filenames.size() < 1) {
+        std::cout << "Error: NOT found camera files under folder '" << file_name << "'" << std::endl;
+        return -1;
+    }
+    std::sort(camera_filenames.begin(), camera_filenames.end());
 
-        if ( img_grayscale[i].rows == 0 ) {
-            printf ( "Image seems to be invalid\n" );
+    snprintf(file_name, sizeof(file_name), "%s/depth", input_folder);
+    get_subfolders(file_name, depth_filenames);
+    if (depth_filenames.size() < 1) {
+        std::cout << "Error: NOT found depth files under folder '" << file_name << "'" << std::endl;
+        return -1;
+    }
+    std::sort(depth_filenames.begin(), depth_filenames.end());
+
+    snprintf(file_name, sizeof(file_name), "%s/normal", input_folder);
+    get_subfolders(file_name, normal_filenames);
+    if (normal_filenames.size() < 1) {
+        std::cout << "Error: NOT found normal files under folder '" << file_name << "'" << std::endl;
+        return -1;
+    }
+    std::sort(normal_filenames.begin(), normal_filenames.end());
+
+    if (image_filenames.size() != camera_filenames.size() 
+        || image_filenames.size() != depth_filenames.size()
+        || image_filenames.size() != normal_filenames.size()) {
+        std::cout << "Error: image/camera/depth/normal files DOES NOT match under '" << input_folder << "'" << std::endl;
+        return -1;
+    }
+
+    dump_gpu_memory();
+
+    vector<Mat_<Vec3b>> image_color;
+    vector<Mat_<uint8_t>> image_gray;
+    for (i = 0; i < image_filenames.size(); i++) {
+        image_gray.push_back(imread(image_filenames[i], IMREAD_GRAYSCALE));
+        image_color.push_back(imread(image_filenames[i], IMREAD_COLOR));
+        if (image_gray[i].rows == 0) {
+            std::cout << "Image " << image_filenames[i] << " seems to be invalid" << std::endl;
             return -1;
         }
     }
+    n_rows = image_gray[0].rows;
+    n_cols = image_gray[0].cols;
 
-    size_t avail;
-    size_t total;
-    cudaMemGetInfo( &avail, &total );
-    size_t used = total - avail;
-    printf("Device memory used: %fMB\n", used/1000000.0f);
 
-    GlobalState *gs = new GlobalState;
-	gs->cameras = new CameraParameters_cu;
-	gs->pc = new PointCloud;
-    cudaMemGetInfo( &avail, &total );
-    used = total - avail;
-    printf("Device memory used: %fMB\n", used/1000000.0f);
-
-    CameraParameters camParams = getCameraParameters (*(gs->cameras), inputFiles);
-    printf("Camera size is %lu\n", camParams.cameras.size());
-
-    selectViews (camParams);
-    int numSelViews = camParams.viewSelectionSubset.size ();
-    cout << "Selected views: " << numSelViews << endl;
-    gs->cameras->viewSelectionSubsetNumber = numSelViews;
-    ofstream myfile;
-    for ( int i = 0; i < numSelViews; i++ ) {
-        cout << camParams.viewSelectionSubset[i] << ", ";
+    gs = new GlobalState;
+    gs->cameras = new CameraParameters_cu;
+    gs->pc = new PointCloud;
+    CameraParameters camParams = getCameraParameters(*(gs->cameras), camera_filenames);
+    selectViews(camParams); // xxxx8888
+    gs->cameras->viewSelectionSubsetNumber = camera_filenames.size();
+    for (i = 0; i < camera_filenames.size(); i++ ) {
         gs->cameras->viewSelectionSubset[i] = camParams.viewSelectionSubset[i];
     }
-    cout << endl;
+
+    gs->params = &algParameters;
+    gs->cameras->cols = n_cols;
+    gs->cameras->rows = n_rows;
+    gs->pc->resize (n_rows * n_cols);
+
+    PointCloudList pc_list;
+    pc_list.resize (n_rows * n_cols); // xxxx????
+    pc_list.size = 0;
+    gs->pc->rows = n_rows;
+    gs->pc->cols = n_cols;
 
     vector<InputData> inputData;
-
-    cout << "Reading normals and depth from disk" << endl;
-    cout << "Size consideredIds is " << consideredIds.size() << endl;
-    for (map<int,string>::iterator it=consideredIds.begin(); it!=consideredIds.end(); ++it){
-        int i = it->first;
-        string id = it->second;
-        int camIdx = getCameraFromId(id, camParams.cameras);
-        if(camIdx < 0)// || camIdx == camParams.idRef)
-            continue;
-
+    for (i = 0; i < image_filenames.size(); i++) {
         InputData dat;
-        dat.path = results_folder + subfolders[i];
 
-        cout << "Reading image " << inputFiles.images_folder + id + ext << endl;
-        dat.inputImage = imread((inputFiles.images_folder + id + ext), IMREAD_COLOR);
+        dat.inputImage = imread(image_filenames[i], IMREAD_COLOR);
 
-        //read normal
-        cout << "Reading normal " << i << ": " << (dat.path + "/normals.dmb").c_str() << endl;
-        readDmbNormal((dat.path + "/normals.dmb").c_str(),dat.normals);
+        // readDmb(depth_filenames[i], dat.depthMap);
+        Mat_<uint8_t> g = imread(depth_filenames[i], IMREAD_GRAYSCALE);
+        g.convertTo(dat.depthMap, CV_32FC1, 1.0/255);
+        dat.depthMap = dat.depthMap * 512.0 + 425.0;
 
-        //read depth
-        cout << "Reading disp " << i << ": " << (dat.path + "/disp.dmb").c_str() << endl;
-        readDmb((dat.path + "/disp.dmb").c_str(),dat.depthMap);
+        // readDmbNormal(normal_filenames[i], dat.normals);
+        Mat_<Vec3b> c = imread(normal_filenames[i], IMREAD_COLOR);
+        c.convertTo(dat.normals, CV_32FC3, 1.0/255);
 
-        //inputData.push_back(move(dat));
         inputData.push_back(dat);
     }
+
     // run gpu run
-    gs->params = &algParameters;
+    vector<Mat > img_color_float(image_gray.size());
+    vector<Mat > color_images_list(image_gray.size());
+    vector<Mat > normal_depth_list(image_gray.size());
 
-    // Init ImageInfo
-    gs->cameras->cols = img_grayscale[0].cols;
-    gs->cameras->rows = img_grayscale[0].rows;
+    for (i = 0; i < image_gray.size(); i++) {
+        vector<Mat_<float> > rgbChannels (3);
+        color_images_list[i] = Mat::zeros (n_rows, n_cols, CV_32FC4);
+        image_color[i].convertTo(img_color_float[i], CV_32FC3); // or CV_32F works (too)
 
-    gs->pc->resize (img_grayscale[0].rows * img_grayscale[0].cols);
-
-	PointCloudList pc_list;
-    pc_list.resize (img_grayscale[0].rows * img_grayscale[0].cols); // xxxx????
-
-    pc_list.size = 0;
-    gs->pc->rows = img_grayscale[0].rows;
-    gs->pc->cols = img_grayscale[0].cols;
-
-    vector<Mat > img_color_float(img_grayscale.size());
-    vector<Mat > color_images_list(img_grayscale.size());
-    vector<Mat > normal_depth_list(img_grayscale.size());
-
-    for (size_t i = 0; i<img_grayscale.size(); i++) {
-        vector<Mat_<float> > rgbChannels ( 3 );
-        color_images_list[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
-        img_color[i].convertTo (img_color_float[i], CV_32FC3); // or CV_32F works (too)
-
-        Mat alpha( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC1 );
+        Mat alpha( n_rows, n_cols, CV_32FC1 );
         split (img_color_float[i], rgbChannels);
         rgbChannels.push_back( alpha);
         merge (rgbChannels, color_images_list[i]);
 
         /* Create vector of normals and disparities */
         vector<Mat_<float> > normal ( 3 );
-        normal_depth_list[i] = Mat::zeros ( img_grayscale[0].rows, img_grayscale[0].cols, CV_32FC4 );
+        normal_depth_list[i] = Mat::zeros ( n_rows, n_cols, CV_32FC4 );
         split (inputData[i].normals, normal);
         normal.push_back( inputData[i].depthMap);
         merge (normal, normal_depth_list[i]);
     }
 
     // Copy images to texture memory
-    addImageToTextureFloatColor (color_images_list, gs->color_images_textures);
-    addImageToTextureFloatColor (normal_depth_list, gs->normal_depth_textures);
+    addImageToTextureFloatColor(color_images_list, gs->color_images_textures);
+    addImageToTextureFloatColor(normal_depth_list, gs->normal_depth_textures);
 
-    runcuda(*gs, pc_list, numSelViews);
+    runcuda(*gs, pc_list, image_filenames.size());
 
-    char plyFile[256];
-    sprintf(plyFile, "%s/final3d_model.ply", output_folder);
-    printf("Writing ply file %s\n", plyFile);
-    storePlyFileBinaryPointCloud (plyFile, pc_list);
+    snprintf(file_name, sizeof(file_name), "%s/final3d_model.ply", output_folder);
+    printf("Writing ply file %s\n", file_name);
+    storePlyFileBinaryPointCloud (file_name, pc_list);
 
     return 0;
 }
 
 int main(int argc, char **argv)
 {
-    if ( argc < 3 ) {
+    if ( argc < 2 ) {
         print_help ();
         return 0;
     }
 
-    InputFiles inputFiles;
+    // InputFiles inputFiles;
 	AlgorithmParameters* algParameters = new AlgorithmParameters;
 
+#if 0
     int ret = getParametersFromCommandLine (argc, argv, inputFiles);
     if ( ret != 0 )
         return ret;
-
-    ret = runFusibile ( argc, argv, *algParameters);
-
-    return 0;
+#endif
+    return runFusibile (argv[1], *algParameters);
 }
 

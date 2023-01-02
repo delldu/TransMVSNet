@@ -7,7 +7,34 @@
 #include <iostream>
 #include <fstream>
 
-static void readPFileStrechaPmvs(const string p_filename, Mat_<float> &P){
+// Read camera extrinsic parameters
+static void read_camera_parameters(const string p_filename, Mat_<float> &P)
+{
+#if 0
+    int i, j;
+    char line[512], *p;
+    ifstream myfile;
+
+    myfile.open(p_filename.c_str(),ifstream::in);
+    myfile.getline(line, sizeof(line));
+
+    for(i = 0; i < 4; i++){
+        if (myfile.eof())
+            break;
+
+        myfile.getline(line, sizeof(line));
+        if (strstr(line, "CONTOUR") != NULL) {
+            i--;
+            continue;
+        }
+
+        for (j = 0, p = strtok( line, " ");  p;  p = strtok( NULL, " "), j++) {
+            P(i,j) = (float)atof(p);
+        }
+    }
+
+    myfile.close();
+#else
     ifstream myfile;
     myfile.open(p_filename.c_str(),ifstream::in);
 
@@ -34,6 +61,7 @@ static void readPFileStrechaPmvs(const string p_filename, Mat_<float> &P){
         }
     }
     myfile.close();
+#endif    
 }
 
 static int readDmbNormal (const char *filename, Mat_<Vec3f> &img)

@@ -161,7 +161,7 @@ __global__ void fusibile (GlobalState &gs, int ref_camera)
     consistent_normal = consistent_normal / ((float) number_consistent + 1.0f);
     consistent_texture4 = consistent_texture4 / ((float) number_consistent + 1.0f);
 
-    if (number_consistent >= gs.params->numConsistentThresh) { // numConsistentThresh == 3
+    if (number_consistent >= 3) { //gs.params->numConsistentThresh numConsistentThresh == 3
         gs.pc->points[center].coord  = consistent_X;
         gs.pc->points[center].normal = consistent_normal;
         gs.pc->points[center].texture4 = consistent_texture4;
@@ -184,7 +184,7 @@ void copy_point_cloud_to_host(GlobalState &gs, int cam, PointCloudList &pc_list)
             texture4[2] = p.texture4.z;
             texture4[3] = p.texture4.w;
 
-            if (count==pc_list.maximum) {
+            if (count == pc_list.maximum) {
                 printf("Not enough space to save points :'(\n... allocating more! :)");
                 pc_list.increase_size(pc_list.maximum*2);
             }
@@ -253,7 +253,8 @@ void fusibile_cu(GlobalState &gs, PointCloudList &pc_list, int num_views)
     size_t total;
     cudaMemGetInfo( &avail, &total );
     size_t used = total - avail;
-    printf("Device memory used: %fMB\n", used/1000000.0f);
+    printf("Device memory used: %.2fMB\n", used/1000000.0f);
+    // dump_gpu_memory();
 
     //int shared_memory_size = sizeof(float)  * SHARED_SIZE ;
     printf("Fusing points\n");
@@ -287,4 +288,13 @@ int runcuda(GlobalState &gs, PointCloudList &pc_list, int num_views)
     printf("Run cuda\n");
     fusibile_cu<float4>(gs, pc_list, num_views);
     return 0;
+}
+
+void dump_gpu_memory()
+{
+    size_t avail, total, used;
+    cudaMemGetInfo( &avail, &total );
+
+    used = total - avail;
+    printf("Device memory used: %.2f MB\n", used/1000000.0f);    
 }
