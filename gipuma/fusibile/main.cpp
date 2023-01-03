@@ -1,53 +1,4 @@
-#ifdef _WIN32
-#include <windows.h>
-#include <ctime>
-#include <direct.h>
-#endif
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <math.h>
-
-#include <sys/types.h>
-#include <dirent.h>
-
-
-// Includes CUDA
-#include <cuda_runtime.h>
-#include <cuda.h>
-#include <cuda_runtime_api.h>
-#include <cuda_texture_types.h>
-#include <vector_types.h>
-
-
-#ifdef _MSC_VER
-#include <io.h>
-#define R_OK 04
-#else
-#include <unistd.h>
-#endif
-
-// CUDA helper functions
-#include "helper_cuda.h"         // helper functions for CUDA error check
-
-#include <map> // multimap
-
-#include <sys/stat.h> // mkdir
-#include <sys/types.h> // mkdir
-
-
-//#include "camera.h"
-#include "algorithmparameters.h"
-#include "globalstate.h"
-#include "fusibile.h"
-
 #include "main.h"
-#include "fileIoUtils.h"
-#include "cameraGeometryUtils.h"
-// #include "mathUtils.h"
-#include "displayUtils.h"
-#include "point_cloud_list.h"
 
 struct InputData
 {
@@ -80,18 +31,7 @@ static void get_subfolders(const char *dirname, vector<string> &subfolders)
 
 static void print_help ()
 {
-    printf ( "fusibile input_folder\n" );
-}
-
-static void selectViews(CameraParameters &cameraParams)
-{
-    size_t i;
-    vector<Camera> cameras = cameraParams.cameras;
-
-    cameraParams.viewSelectionSubset.clear();
-    for (i = 0; i < cameras.size(); i++) {
-        cameraParams.viewSelectionSubset.push_back(i);
-    }
+    printf ( "fusibile input_folder ...\n" );
 }
 
 static void addImageToTextureFloatColor(vector<Mat> &imgs, cudaTextureObject_t texs[])
@@ -136,7 +76,7 @@ static void addImageToTextureFloatColor(vector<Mat> &imgs, cudaTextureObject_t t
     }
 }
 
-static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
+static int runFusibile (char *input_folder)
 {
     GlobalState *gs;
     size_t i, n_rows, n_cols;
@@ -147,12 +87,8 @@ static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
     vector<string> depth_filenames;
     vector<string> normal_filenames;
 
-    sprintf(output_folder, "%s/point/", input_folder);
-#if defined(_WIN32)
-    _mkdir(output_folder);
-#else
+    sprintf(output_folder, "%s/point", input_folder);
     mkdir(output_folder, 0777);
-#endif
 
     snprintf(file_name, sizeof(file_name), "%s/image", input_folder);
     get_subfolders(file_name, image_filenames);
@@ -208,26 +144,23 @@ static int runFusibile (char *input_folder, AlgorithmParameters &algParameters)
     n_rows = image_gray[0].rows;
     n_cols = image_gray[0].cols;
 
+    // GS
     gs = new GlobalState;
-    gs->cameras = new CameraParameters_cu;
-    gs->pc = new PointCloud;
-    CameraParameters camParams = getCameraParameters(*(gs->cameras), camera_filenames);
-    selectViews(camParams); // xxxx8888
-    gs->cameras->viewSelectionSubsetNumber = camera_filenames.size();
-    for (i = 0; i < camera_filenames.size(); i++ ) {
-        gs->cameras->viewSelectionSubset[i] = camParams.viewSelectionSubset[i];
-    }
+    gs->algorithm = new AlgorithmParameters;
 
-    gs->params = &algParameters;
+    // GS Camera
+    gs->cameras = new CameraParameters_cu;
+    getCameraParameters(*(gs->cameras), camera_filenames);
     gs->cameras->cols = n_cols;
     gs->cameras->rows = n_rows;
+
+    // GS PC
+    gs->pc = new PointCloud;
     gs->pc->resize (n_rows * n_cols);
 
     PointCloudList pc_list;
     pc_list.resize (n_rows * n_cols); // xxxx????
     pc_list.size = 0;
-    gs->pc->rows = n_rows;
-    gs->pc->cols = n_cols;
 
     vector<InputData> inputData;
     for (i = 0; i < image_filenames.size(); i++) {
@@ -286,11 +219,12 @@ int main(int argc, char **argv)
 {
     if ( argc < 2 ) {
         print_help ();
-        return 0;
+        return -1;
     }
 
-	AlgorithmParameters* algParameters = new AlgorithmParameters;
+    for (int i = 1; i < argc; i++)
+        runFusibile(argv[i]); 
 
-    return runFusibile (argv[1], *algParameters);
+    return 0;
 }
 

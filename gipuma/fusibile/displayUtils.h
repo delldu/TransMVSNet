@@ -3,15 +3,14 @@
  */
 
 #pragma once
-#include <sstream>
-#include <fstream>
+// #include <iostream>
 
 #include "point_cloud.h"
 #include "point_cloud_list.h"
 
 
 static void save_point_cloud (char* ply_filename, PointCloudList &pc) {
-    cout << "store 3D points to file " << ply_filename << endl;
+    std::cout << "Store 3D points to file " << ply_filename << std::endl;
 
     FILE *fp = fopen(ply_filename, "wb");
 

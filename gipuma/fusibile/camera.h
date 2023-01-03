@@ -1,34 +1,31 @@
 #pragma once
 #include "managed.h"
 #include "config.h"
-#include <vector_types.h>
 #include "opencv2/core/core.hpp"
 using namespace cv;
-using namespace std;
 
 //assuming that K1 = K2 = K, P1 = K [I | 0] and P2 = K [R | t])
 
 struct Camera {
-    Camera () : P ( Mat::eye ( 3,4,CV_32F ) ), R ( Mat::eye ( 3,3,CV_32F ) ) {}
+    Camera () : P(Mat::eye ( 3,4,CV_32F ) ), R( Mat::eye ( 3,3,CV_32F )) {}
 
     Mat_<float> P;
     Mat_<float> M_inv;
-    Mat_<float> R;
     Mat_<float> K;
+    Mat_<float> R;
+    Mat_<float> T;
 
-    Mat_<float> t;
     Vec3f C3; // Camera Center (x, y, z),
-    // string id;
 };
 
 class Camera_cu : public Managed {
 public:
     float* P;
     float* M_inv;
-    float* R;
     float* K;
+    float* R;
+    float4 P_col34; // P.col(3), like t ?
 
-    float4 P_col34; // P.col(3)
     float4 C4; // Camera center ?
 
     Camera_cu() {
@@ -46,27 +43,17 @@ public:
     }
 };
 
-struct CameraParameters {
-    CameraParameters () {}
-    Mat_<float> K; //if K varies from camera to camera: K and f need to be stored within Camera
-    vector<Camera> cameras;
-    vector<int> viewSelectionSubset;
-};
-
 class __align__(128) CameraParameters_cu : public Managed {
 public:
-    Camera_cu cameras[MAX_IMAGES];
+    int n_cameras;
     int cols;
     int rows;
-    int* viewSelectionSubset;
-    int viewSelectionSubsetNumber;
+    Camera_cu cameras[MAX_IMAGES];
     
     CameraParameters_cu() {
-        cudaMallocManaged (&viewSelectionSubset, sizeof(int) * MAX_IMAGES);
     }
 
     ~CameraParameters_cu() {
-        cudaFree (viewSelectionSubset);
     }
 };
 

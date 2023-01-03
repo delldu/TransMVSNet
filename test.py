@@ -163,7 +163,7 @@ if __name__ == '__main__':
             if not args.testpath_single_scene else [os.path.basename(args.testpath_single_scene)]
 
     # step1. save all the depth maps and the masks in outputs directory
-    save_depth(testlist)
+    # save_depth(testlist)
 
     # step2. filter saved depth maps with photometric confidence maps and geometric constraints
     gipuma_filter(testlist, args.outdir, args.fusibile_exe_path)

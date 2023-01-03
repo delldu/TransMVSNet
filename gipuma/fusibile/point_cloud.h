@@ -5,22 +5,19 @@
 
 class __align__(128) Point_cu : public Managed {
 public:
-    float4 normal; // Normal
-    float4 coord; // Point coordinate
-    float texture; // Average texture color
-    float4 texture4; // Average texture color
+    float4 coord;   // Coordinate
+    float4 normal;  // Normal
+    float4 texture4; // Texture
 };
 
 
 class __align__(128) PointCloud : public Managed {
 public:
     Point_cu *points;
-    int rows;
-    int cols;
 
     void resize(int n) {
         cudaMallocManaged (&points, sizeof(Point_cu) * n);
-        memset(points,  0, sizeof(Point_cu) * n);
+        memset(points, 0, sizeof(Point_cu) * n);
     }
 
     ~PointCloud() {

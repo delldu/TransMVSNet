@@ -4,14 +4,13 @@
 
 class AlgorithmParameters : public Managed{
 public:
-    //threshold for consistency check
-    float depthThresh;
-    float normalThresh ;
-    int numConsistentThresh; // how many views need to be consistent?
+    float depth_threshold;
+    float normal_threshold;
+    int consistent_threshold; // how many views need to be consistent?
 
-    AlgorithmParameters(){
-        depthThresh = 0.25f;
-        normalThresh = 0.52f;
-        numConsistentThresh = 3;
+    AlgorithmParameters() {
+        depth_threshold = 0.25f;
+        normal_threshold = 0.52f;
+        consistent_threshold = 3;
     }
 };

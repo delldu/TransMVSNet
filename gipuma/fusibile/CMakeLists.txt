@@ -32,12 +32,10 @@ set( CMAKE_EXPORT_COMPILE_COMMANDS 1 )
 cuda_add_executable(
     fusibile
     cameraGeometryUtils.h
-    vector_operations.h
     camera.h
     globalstate.h
     algorithmparameters.h
     displayUtils.h
-    fileIoUtils.h
     fusibile.cu
     main.cpp
     )
