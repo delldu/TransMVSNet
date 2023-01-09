@@ -1,7 +1,7 @@
 #pragma once
 
 #include <sys/types.h>
-#include <sys/stat.h> // mkdir
+#include <sys/stat.h>			// mkdir
 #include <dirent.h>
 
 #include <iostream>
@@ -24,5 +24,3 @@
 #include "point_cloud_list.h"
 
 using namespace std;
-
-
