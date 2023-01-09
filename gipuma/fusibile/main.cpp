@@ -1,14 +1,6 @@
 #include "main.h"
 
-struct InputData
-{
-    string path;
-    Mat_<float> depthMap;
-    Mat_<Vec3b> inputImage;
-    Mat_<Vec3f> normals;
-};
-
-static void get_subfolders(const char *dirname, vector<string> &subfolders)
+static void get_subfolders(const char *dirname, vector<string> &subfolders, const char *extname)
 {
     DIR *dir;
     struct dirent *ent;
@@ -20,7 +12,9 @@ static void get_subfolders(const char *dirname, vector<string> &subfolders)
             char* name = ent->d_name;
             if(strcmp(name,".") == 0 || strcmp(ent->d_name,"..") == 0)
                 continue;
-            subfolders.push_back(string(dirname) + "/" + string(name));
+
+            if (strstr(name, extname))
+                subfolders.push_back(string(dirname) + "/" + string(name));
         }
         closedir (dir);
     } else {
@@ -79,70 +73,50 @@ static void addImageToTextureFloatColor(vector<Mat> &imgs, cudaTextureObject_t t
 static int runFusibile (char *input_folder)
 {
     GlobalState *gs;
-    size_t i, n_rows, n_cols;
+    size_t i, i2, j2, n_rows, n_cols, n_filenames;
     char output_folder[256], file_name[512];
 
     vector<string> image_filenames;
     vector<string> camera_filenames;
-    vector<string> depth_filenames;
-    vector<string> normal_filenames;
 
     sprintf(output_folder, "%s/point", input_folder);
     mkdir(output_folder, 0777);
 
     snprintf(file_name, sizeof(file_name), "%s/image", input_folder);
-    get_subfolders(file_name, image_filenames);
+    get_subfolders(file_name, image_filenames, ".png");
     if (image_filenames.size() < 1) {
-        std::cout << "Error: NOT find images under folder '" << file_name << "'" << std::endl;
+        std::cout << "Error: NOT found images under folder '" << file_name << "'" << std::endl;
         return -1;
     }
     std::sort(image_filenames.begin(), image_filenames.end());
+    n_filenames = image_filenames.size();
 
     snprintf(file_name, sizeof(file_name), "%s/camera", input_folder);
-    get_subfolders(file_name, camera_filenames);
+    get_subfolders(file_name, camera_filenames, ".txt");
     if (camera_filenames.size() < 1) {
         std::cout << "Error: NOT found camera files under folder '" << file_name << "'" << std::endl;
         return -1;
     }
     std::sort(camera_filenames.begin(), camera_filenames.end());
 
-    snprintf(file_name, sizeof(file_name), "%s/depth", input_folder);
-    get_subfolders(file_name, depth_filenames);
-    if (depth_filenames.size() < 1) {
-        std::cout << "Error: NOT found depth files under folder '" << file_name << "'" << std::endl;
-        return -1;
-    }
-    std::sort(depth_filenames.begin(), depth_filenames.end());
-
-    snprintf(file_name, sizeof(file_name), "%s/normal", input_folder);
-    get_subfolders(file_name, normal_filenames);
-    if (normal_filenames.size() < 1) {
-        std::cout << "Error: NOT found normal files under folder '" << file_name << "'" << std::endl;
-        return -1;
-    }
-    std::sort(normal_filenames.begin(), normal_filenames.end());
-
-    if (image_filenames.size() != camera_filenames.size() 
-        || image_filenames.size() != depth_filenames.size()
-        || image_filenames.size() != normal_filenames.size()) {
-        std::cout << "Error: image/camera/depth/normal files DOES NOT match under '" << input_folder << "'" << std::endl;
+    if (image_filenames.size() != camera_filenames.size()) {
+        std::cout << "Error: image/camera files DOES NOT match under '" << input_folder << "'" << std::endl;
         return -1;
     }
 
     dump_gpu_memory();
 
-    vector<Mat_<Vec3b>> image_color;
-    vector<Mat_<uint8_t>> image_gray;
-    for (i = 0; i < image_filenames.size(); i++) {
-        image_gray.push_back(imread(image_filenames[i], IMREAD_GRAYSCALE));
-        image_color.push_back(imread(image_filenames[i], IMREAD_COLOR));
-        if (image_gray[i].rows == 0) {
+    vector<Mat_<Vec4b>> color_images; // png with alpha -- 4b
+    for (i = 0; i < n_filenames; i++) {
+        color_images.push_back(imread(image_filenames[i], IMREAD_UNCHANGED)); // IMREAD_COLOR, IMREAD_UNCHANGED
+        if (color_images[i].rows == 0) {
             std::cout << "Image " << image_filenames[i] << " seems to be invalid" << std::endl;
             return -1;
         }
+        // std::cout << color_images[i] << std::endl;
     }
-    n_rows = image_gray[0].rows;
-    n_cols = image_gray[0].cols;
+    n_rows = color_images[0].rows;
+    n_cols = color_images[0].cols;
 
     // GS
     gs = new GlobalState;
@@ -162,44 +136,43 @@ static int runFusibile (char *input_folder)
     pc_list.resize (n_rows * n_cols); // xxxx????
     pc_list.size = 0;
 
-    vector<InputData> inputData;
-    for (i = 0; i < image_filenames.size(); i++) {
-        InputData dat;
-
-        dat.inputImage = imread(image_filenames[i], IMREAD_COLOR);
-
-        // readDmb(depth_filenames[i], dat.depthMap);
-        Mat_<uint8_t> g = imread(depth_filenames[i], IMREAD_GRAYSCALE);
-        g.convertTo(dat.depthMap, CV_32FC1, 1.0/255);
-        dat.depthMap = dat.depthMap * 512.0 + 425.0;
-
-        // readDmbNormal(normal_filenames[i], dat.normals);
-        Mat_<Vec3b> c = imread(normal_filenames[i], IMREAD_COLOR);
-        c.convertTo(dat.normals, CV_32FC3, 1.0/255);
-
-        inputData.push_back(dat);
-    }
-
     // run gpu run
-    vector<Mat > img_color_float(image_gray.size());
-    vector<Mat > color_images_list(image_gray.size());
-    vector<Mat > normal_depth_list(image_gray.size());
+    vector<Mat > color_images_list(n_filenames); // RGBA
+    vector<Mat > normal_depth_list(n_filenames); // normal(3) + depth(1)
 
-    for (i = 0; i < image_gray.size(); i++) {
-        vector<Mat_<float> > rgbChannels (3);
-        color_images_list[i] = Mat::zeros (n_rows, n_cols, CV_32FC4);
-        image_color[i].convertTo(img_color_float[i], CV_32FC3); // or CV_32F works (too)
+    for (i = 0; i < n_filenames; i++) {
+        color_images_list[i] = Mat::zeros(n_rows, n_cols, CV_32FC4);
 
-        Mat alpha( n_rows, n_cols, CV_32FC1 );
-        split (img_color_float[i], rgbChannels);
-        rgbChannels.push_back( alpha);
-        merge (rgbChannels, color_images_list[i]);
+        Mat_<Vec4f> rgba(n_rows, n_cols, CV_32FC4);
+        color_images[i].convertTo(rgba, CV_32FC4, 1.0/255.0);
+        vector<Mat_<float>> rgba_channels(4);
+        split(rgba, rgba_channels); // C++
+        Mat_<float> depth = rgba_channels.at(3); // Save depth
+        rgba_channels.pop_back();
+        Mat alpha(n_rows, n_cols, CV_32FC1);
+        rgba_channels.push_back(alpha);
+        merge(rgba_channels, color_images_list[i]);
 
         /* Create vector of normals and disparities */
-        vector<Mat_<float> > normal ( 3 );
-        normal_depth_list[i] = Mat::zeros ( n_rows, n_cols, CV_32FC4 );
-        split (inputData[i].normals, normal);
-        normal.push_back( inputData[i].depthMap);
+        normal_depth_list[i] = Mat::zeros(n_rows, n_cols, CV_32FC4);
+        Mat_<Vec3f> normals(n_rows, n_cols, CV_32FC3);
+        float *p_depth;
+        Vec3f *p_normals;
+        for (i2 = 0; i2 < n_rows; i2++) {
+            p_depth = depth.ptr<float>(i2);
+            p_normals = normals.ptr<Vec3f>(i2);
+            for (j2 = 0; j2 < n_cols; j2++) {
+                // no confidence if depth < 1.0/255.0 or >= 254.0/255.0
+                if (p_depth[j2] <= 0.003 || p_depth[j2] >= 0.997)
+                    continue;
+                p_normals[j2] = (p_depth[j2] <= 0.003)? Vec3f(0.0, 0.0, 0.0): Vec3f(0.0, 0.0, 1.0);
+            }
+        }
+        depth = 425.0 + 512.0 * depth;
+
+        vector<Mat_<float>> normal(3);
+        split(normals, normal); // comes from C++ ???
+        normal.push_back(depth);
         merge (normal, normal_depth_list[i]);
     }
 
@@ -207,8 +180,9 @@ static int runFusibile (char *input_folder)
     addImageToTextureFloatColor(color_images_list, gs->color_images_textures);
     addImageToTextureFloatColor(normal_depth_list, gs->normal_depth_textures);
 
-    runcuda(*gs, pc_list, image_filenames.size());
+    runcuda(*gs, pc_list, n_filenames);
 
+    pc_list.size = 1024000;
     snprintf(file_name, sizeof(file_name), "%s/3d_model.ply", output_folder);
     save_point_cloud (file_name, pc_list);
 

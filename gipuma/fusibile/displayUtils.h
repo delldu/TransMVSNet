@@ -33,9 +33,9 @@ static void save_point_cloud (char* ply_filename, PointCloudList &pc) {
         const Point_li &p = pc.points[i];
 
         float4 X = p.coord;
-        const char color_r = (int)p.texture4[2];
-        const char color_g = (int)p.texture4[1];
-        const char color_b = (int)p.texture4[0];
+        const char color_r = (int)(p.texture4[2] * 255.0);
+        const char color_g = (int)(p.texture4[1] * 255.0);
+        const char color_b = (int)(p.texture4[0] * 255.0);
 
         if(!(X.x < FLT_MAX && X.x > -FLT_MAX) || !(X.y < FLT_MAX && X.y > -FLT_MAX) || !(X.z < FLT_MAX && X.z >= -FLT_MAX)){
             X.x = 0.0f;

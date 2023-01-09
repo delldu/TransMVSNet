@@ -124,18 +124,28 @@ def save_scene_depth(testlist):
                 conf_2 = cv2.resize(conf_2, (W,H))
                 conf_final = photo_confidence * conf_1 * conf_2
 
+                # (Pdb) type(img) -- <class 'numpy.ndarray'>
+                # (Pdb) img.shape -- (3, 864, 1152)
+                # (Pdb) img.min() -- 0.01333515
+                # (Pdb) img.max() -- 1.0
+
+                # (Pdb) type(depth_est) -- <class 'numpy.ndarray'>
+                # (Pdb) depth_est.shape -- (864, 1152)
+                # (Pdb) depth_est.min() -- 425.0
+                # (Pdb) depth_est.max() -- 935.0
+
                 depth_est[conf_final < 0.01] = 0.0 # ==> 'disp.dmb'
-                normal_color = depth_normal(depth_est) # ==> normals.dmb
+                # normal_color = depth_normal(depth_est) # ==> normals.dmb
 
                 # save depth maps
-                depth_filename = os.path.join(args.outdir, filename.format('depth', '.pfm'))
-                os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                depth_color = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
-                cv2.imwrite(os.path.join(args.outdir, filename.format('depth', '.png')), depth_color)
+                # depth_filename = os.path.join(args.outdir, filename.format('depth', '.pfm'))
+                # os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
+                # depth = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
+                # cv2.imwrite(os.path.join(args.outdir, filename.format('depth', '.png')), depth)
 
-                normal_filename = os.path.join(args.outdir, filename.format('normal', '.png'))
-                os.makedirs(normal_filename.rsplit('/', 1)[0], exist_ok=True)
-                cv2.imwrite(normal_filename, normal_color)
+                # normal_filename = os.path.join(args.outdir, filename.format('normal', '.png'))
+                # os.makedirs(normal_filename.rsplit('/', 1)[0], exist_ok=True)
+                # cv2.imwrite(normal_filename, normal_color)
 
                 # save cams, img
                 cam_filename = os.path.join(args.outdir, filename.format('camera', '.txt'))
@@ -146,7 +156,10 @@ def save_scene_depth(testlist):
                 os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
                 img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR) # img_bgr.shape -- (864, 1152, 3), dtype=uint8
-                cv2.imwrite(img_filename, img_bgr)
+                # cv2.imwrite(img_filename, img_bgr)
+                depth = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
+                image = np.concatenate((img_bgr, depth[...,None]), axis=2)
+                cv2.imwrite(img_filename, image)
 
     torch.cuda.empty_cache()
     gc.collect()
