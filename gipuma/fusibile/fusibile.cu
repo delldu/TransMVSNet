@@ -10,7 +10,7 @@
 #include <cuda.h>
 #include <curand_kernel.h>
 #include "point_cloud_list.h"
-
+// #include <iostream>
 
 #define FORCEINLINE __forceinline__
 
@@ -37,29 +37,35 @@ static __device__ float l2_float4(float4 a)
 
 }
 
-__device__ FORCEINLINE float depth_convert_cu(const float &f, const Camera_cu & cam_ref, const Camera_cu & cam,
-											  const float &d)
+__device__ FORCEINLINE float depth_convert_cu(
+	const float &f, // focal length
+	const Camera_cu & cam_ref, 
+	const Camera_cu & cam, const float &d)
 {
 	float baseline = l2_float4(cam_ref.C4 - cam.C4);
 	return f * baseline / d;
 }
 
 #define matvecmul4(m, v, out) \
-out->x = m[0] * v.x + m[1] * v.y + m[2] * v.z; \
-out->y = m[3] * v.x + m[4] * v.y + m[5] * v.z; \
-out->z = m[6] * v.x + m[7] * v.y + m[8] * v.z;
+	out->x = m[0] * v.x + m[1] * v.y + m[2] * v.z; \
+	out->y = m[3] * v.x + m[4] * v.y + m[5] * v.z; \
+	out->z = m[6] * v.x + m[7] * v.y + m[8] * v.z;
 
 
-__device__ FORCEINLINE void get_3dpoint_cu(const Camera_cu & cam, const int2 & p, const float &depth,
-										   float4 * __restrict__ ptX)
+__device__ FORCEINLINE void get_3dpoint_cu(
+	const Camera_cu & cam,
+	const int2 & p,
+	const float &depth,
+	float4 * __restrict__ ptX)
 {
 	// in case camera matrix is not normalized: see page 162, 
-	// then depth might not be the real depth but w and depth needs to be computed from that first
+	// then depth might not be the real depth but w and depth needs to 
+	// be computed from that first
 	const float4 pt = make_float4(depth * (float) p.x - cam.P_col34.x,
 								  depth * (float) p.y - cam.P_col34.y,
 								  depth - cam.P_col34.z,
 								  0);
-	matvecmul4(cam.M_inv, pt, ptX);
+	matvecmul4(cam.R_inv, pt, ptX);
 }
 
 #define matvecmul4P(m, v, out) \
@@ -82,7 +88,8 @@ __device__ FORCEINLINE void project_on_camera(const float4 & X, const Camera_cu 
  */
 __global__ void fusibile(GlobalState & gs, int ref_camera)
 {
-	int2 p = make_int2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
+	int2 p = make_int2(blockIdx.x * blockDim.x + threadIdx.x, 
+		blockIdx.y * blockDim.y + threadIdx.y);
 
 	const int cols = gs.cameras->cols;
 	const int rows = gs.cameras->rows;
@@ -122,20 +129,27 @@ __global__ void fusibile(GlobalState & gs, int ref_camera)
 		if (tmp_pt.x < 0 || tmp_pt.x >= cols || tmp_pt.y < 0 || tmp_pt.y >= rows)
 			continue;
 
-		float4 tmp_T = tex2D < float4 > (gs.color_images_textures[i], tmp_pt.x + 0.5f, tmp_pt.y + 0.5f);
+		float4 tmp_T = tex2D < float4 > (gs.color_images_textures[i], 
+			tmp_pt.x + 0.5f, tmp_pt.y + 0.5f);
+
 		if (tmp_T.w <= 425.001) // 1.0/255.0 -- 0.0039
 			continue;
 
-		const float depth_disp = depth_convert_cu(gs_cameras.cameras[ref_camera].K[0],
-												  gs_cameras.cameras[ref_camera], gs_cameras.cameras[i],
-												  depth);
+		const float depth_disp = depth_convert_cu(
+									gs_cameras.cameras[ref_camera].K[0], // focal_length
+									gs_cameras.cameras[ref_camera],
+									gs_cameras.cameras[i],
+									depth);
 
-		const float tmp_depth_disp = depth_convert_cu(gs_cameras.cameras[ref_camera].K[0],
-													  gs_cameras.cameras[ref_camera], gs_cameras.cameras[i],
-													  tmp_T.w);
+		const float temp_disp = depth_convert_cu(
+									gs_cameras.cameras[ref_camera].K[0],
+									gs_cameras.cameras[ref_camera],
+									gs_cameras.cameras[i],
+									tmp_T.w);
 
 		// check on depth
-		if (fabsf(depth_disp - tmp_depth_disp) < gs.algorithm->depth_threshold) {	// depth_threshold == 0.25
+		if (fabsf(depth_disp - temp_disp) < gs.algorithm->depth_threshold) {
+			// depth_threshold == 0.25
 			float4 tmp_X;		// 3d point of consistent point on other view
 			int2 tmp_p = make_int2((int) tmp_pt.x, (int) tmp_pt.y);
 			get_3dpoint_cu(gs_cameras.cameras[i], tmp_p, tmp_T.w, &tmp_X);
@@ -149,8 +163,8 @@ __global__ void fusibile(GlobalState & gs, int ref_camera)
 
 	if (count >= consistent_threshold) {
 		// Average normals and points
-		sum_X = sum_X / ((float) count + 1.0f);
-		sum_T = sum_T / ((float) count + 1.0f);
+		sum_X = sum_X/((float) count + 1.0f);
+		sum_T = sum_T/((float) count + 1.0f);
 
 		gs.pc->points[center].coord = sum_X;
 		gs.pc->points[center].texture4 = sum_T;
@@ -195,7 +209,7 @@ void copy_pc_to_host(GlobalState & gs, int cam, PointCloudList & pc_list)
 	}
 	pc_list.size = count;
 
-	printf("Found %.2f million points\n", count / 1000000.0f);
+	printf("Found %.2fM points\n", count / 1000000.0f);
 }
 
 void fusibile_cu(GlobalState & gs, PointCloudList & pc_list, int num_views)
@@ -269,7 +283,7 @@ void fusibile_cu(GlobalState & gs, PointCloudList & pc_list, int num_views)
 		printf("Error: %s\n", cudaGetErrorString(err));
 }
 
-int runcuda(GlobalState & gs, PointCloudList & pc_list, int num_views)
+int run_cuda(GlobalState & gs, PointCloudList & pc_list, int num_views)
 {
 	printf("Run cuda\n");
 	fusibile_cu(gs, pc_list, num_views);

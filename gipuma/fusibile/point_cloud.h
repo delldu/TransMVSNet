@@ -3,13 +3,11 @@
 #include "managed.h"
 #include <vector_types.h>		// float4
 
-class __align__(128) Point_cu:public Managed
+struct Point_cu
 {
-  public:
 	float4 coord;				// Coordinate
 	float4 texture4;			// Texture
 };
-
 
 class __align__(128) PointCloud:public Managed
 {

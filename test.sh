@@ -21,3 +21,6 @@ python test.py \
 --fusibile_exe_path=$FUSIBLE_PATH
 #--filter_method="normal"
 
+
+# gipuma/fusibile/build/fusibile outputs/dtu_testing/scan24
+

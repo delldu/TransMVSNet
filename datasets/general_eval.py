@@ -23,8 +23,10 @@ class MVSDataset(Dataset):
         self.fix_wh = False
 
         self.metas = self.build_list()
+        # len(self.metas) -- 49
         # scan, ref_view, src_views
         # self.metas[0] -- ('scan1', 0, [10, 1, 9, 12, 11, 13, 2, 8, 14, 27])
+        # pdb.set_trace()
 
     def build_list(self):
         metas = []
@@ -82,6 +84,7 @@ class MVSDataset(Dataset):
         # intrinsics: line [7-10), 3x3 matrix
         intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ').reshape((3, 3))
         intrinsics[:2, :] /= 4.0
+
         # depth_min & depth_interval: line 11
         depth_min = float(lines[11].split()[0]) # ==> 425.0
         depth_interval = float(lines[11].split()[1]) # ==> 2.5
@@ -91,7 +94,7 @@ class MVSDataset(Dataset):
             depth_max = depth_min + int(float(num_depth)) * depth_interval
             depth_interval = (depth_max - depth_min) / self.ndepths #  self.ndepths -- 192
 
-        depth_interval *= interval_scale
+        depth_interval *= interval_scale # 2.5
 
         return intrinsics, extrinsics, depth_min, depth_interval
 
@@ -104,6 +107,8 @@ class MVSDataset(Dataset):
 
     def read_depth(self, filename):
         # read pfm depth file
+        pdb.set_trace()
+
         return np.array(read_pfm(filename)[0], dtype=np.float32)
 
     def scale_mvs_input(self, img, intrinsics, max_w, max_h, base=32):
@@ -131,6 +136,7 @@ class MVSDataset(Dataset):
         scan, ref_view, src_views = meta
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.nviews - 1]
+        # ==> view_ids -- [0, 10, 1, 9, 12]
 
         imgs = []
         depth_values = None
@@ -138,7 +144,9 @@ class MVSDataset(Dataset):
 
         for i, vid in enumerate(view_ids):
             img_filename = os.path.join(self.datapath, '{}/images_post/{:0>8}.jpg'.format(scan, vid))
-            if not os.path.exists(img_filename): # False
+            # ==> img_filename -- 'data/dtu_test/scan24/images_post/00000000.jpg'
+
+            if not os.path.exists(img_filename): # True
                 img_filename = os.path.join(self.datapath, '{}/images/{:0>8}.jpg'.format(scan, vid))
 
             proj_mat_filename = os.path.join(self.datapath, '{}/cams/{:0>8}_cam.txt'.format(scan, vid))
@@ -148,16 +156,17 @@ class MVSDataset(Dataset):
                 self.read_cam_file(proj_mat_filename, interval_scale=self.interval_scale[scan])
 
             # scale input
+            # self.max_w, self.max_h -- (1152, 864)
             img, intrinsics = self.scale_mvs_input(img, intrinsics, self.max_w, self.max_h)
 
-            if self.fix_res:
+            if self.fix_res: # False
                 # using the same standard height or width in entire scene.
                 s_h, s_w = img.shape[:2]
                 self.fix_res = False
                 self.fix_wh = True
 
             if i == 0:
-                if not self.fix_wh:
+                if not self.fix_wh: # True
                     # using the same standard height or width in each nviews.
                     s_h, s_w = img.shape[:2]
 
@@ -181,21 +190,25 @@ class MVSDataset(Dataset):
             if i == 0:  # reference view
                 depth_values = np.arange(depth_min, depth_interval * (self.ndepths - 0.5) + depth_min, depth_interval,
                                          dtype=np.float32)
+                # ==> depth_values -- array([425. , 427.5, 430. , ... , 900. , 902.5], dtype=float32)
 
         #all
         imgs = np.stack(imgs).transpose([0, 3, 1, 2])
         proj_matrix = np.stack(proj_matrix)
+        # ==> proj_matrix.shape -- (5, 2, 4, 4)
 
         stage2_pjmats = proj_matrix.copy()
-        stage2_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 2
+        stage2_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 2 # For K ?
         stage3_pjmats = proj_matrix.copy()
-        stage3_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 4
+        stage3_pjmats[:, 1, :2, :] = proj_matrix[:, 1, :2, :] * 4 # For K ?
 
         proj_matrix_ms = {
             "stage1": proj_matrix,
             "stage2": stage2_pjmats,
             "stage3": stage3_pjmats
         }
+
+        # imgs.shape -- (5, 3, 864, 1152)
 
         return {"imgs": imgs,
                 "proj_matrix": proj_matrix_ms,

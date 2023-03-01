@@ -35,7 +35,8 @@ class DepthNet(nn.Module):
         super(DepthNet, self).__init__()
         self.pixel_wise_net = PixelwiseNet()
 
-    def forward(self, features, proj_matrix, depth_values, num_depth, cost_regularization, view_weights=None):
+    def forward(self, features, proj_matrix, depth_values, num_depth, cost_regularization, \
+        view_weights=None):
         """forward.
 
         :param stage_i: int, index of stage, [1, 2, 3], stage_1 corresponds to lowest image resolution
@@ -100,7 +101,8 @@ class DepthNet(nn.Module):
 
         with torch.no_grad():
             photo_confidence = torch.max(prob_volume, dim=1)[0]
-        if view_weights == None:
+
+        if view_weights == None: # True
             view_weights = torch.cat(view_weight_list, dim=1) # [B, Nview, H, W]
             return {"depth": depth,  "photo_confidence": photo_confidence, "prob_volume": prob_volume, "depth_values": depth_values}, view_weights.detach()
         else:
@@ -112,6 +114,10 @@ class TransMVSNet(nn.Module):
                  depth_interals_ratio=[4.0, 1.0, 0.5],
                  cr_base_chs=[8, 8, 8]):
         super(TransMVSNet, self).__init__()
+        # ndepths = [48, 32, 8]
+        # depth_interals_ratio = [4.0, 1.0, 0.5]
+        # cr_base_chs = [8, 8, 8]
+
         assert len(ndepths) == len(depth_interals_ratio)
 
         self.ndepths = ndepths
@@ -145,10 +151,13 @@ class TransMVSNet(nn.Module):
         # step 1. feature extraction
         features = []
         # imgs.size() -- [3, 5, 3, 864, 1152]
-        for nview_idx in range(imgs.size(1)):
+        for nview_idx in range(imgs.size(1)): # 5
             img = imgs[:, nview_idx]
             features.append(self.feature(img))
         # img.size() -- [3, 3, 864, 1152]
+        # (Pdb) features[0]['stage1'].size() -- [3, 32, 216, 288]
+        # (Pdb) features[0]['stage2'].size() -- [3, 16, 432, 576]
+        # (Pdb) features[0]['stage3'].size() -- [3, 8, 864, 1152]
 
         features = self.FMT_with_pathway(features)
 

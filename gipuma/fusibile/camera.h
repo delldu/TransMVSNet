@@ -7,11 +7,13 @@ using namespace cv;
 //assuming that K1 = K2 = K, P1 = K [I | 0] and P2 = K [R | t])
 struct Camera {
 	Camera():P(Mat::eye(3, 4, CV_32F)), R(Mat::eye(3, 3, CV_32F)) {
-	} Mat_ < float >P;
-	Mat_ < float >M_inv;
+	}
+
+	Mat_ < float >P;
 	Mat_ < float >K;
 	Mat_ < float >R;
 	Mat_ < float >T;
+	Mat_ < float >R_inv;
 
 	Vec3f C3;					// Camera Center (x, y, z),
 };
@@ -19,23 +21,25 @@ struct Camera {
 class Camera_cu:public Managed {
   public:
 	float *P;
-	float *M_inv;
 	float *K;
 	float *R;
+	float *R_inv;
 	float4 P_col34;				// P.col(3), like t ?
 
 	float4 C4;					// Camera center ?
 
 	 Camera_cu() {
-		cudaMallocManaged(&P, sizeof(float) * 4 * 4);
-		 cudaMallocManaged(&M_inv, sizeof(float) * 4 * 4);
+		 cudaMallocManaged(&P, sizeof(float) * 4 * 4);
 		 cudaMallocManaged(&K, sizeof(float) * 4 * 4);
 		 cudaMallocManaged(&R, sizeof(float) * 4 * 4);
-	} ~Camera_cu() {
+		 cudaMallocManaged(&R_inv, sizeof(float) * 4 * 4);
+	}
+
+	 ~Camera_cu() {
 		cudaFree(P);
-		cudaFree(M_inv);
 		cudaFree(K);
 		cudaFree(R);
+		cudaFree(R_inv);
 	}
 };
 

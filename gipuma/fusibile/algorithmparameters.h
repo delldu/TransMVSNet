@@ -7,7 +7,8 @@ class AlgorithmParameters:public Managed {
 	float depth_threshold;
 	int consistent_threshold;	// how many views need to be consistent?
 
-	 AlgorithmParameters() {
+	AlgorithmParameters() {
 		depth_threshold = 0.25f;
 		consistent_threshold = 3;
-}};
+	}
+};

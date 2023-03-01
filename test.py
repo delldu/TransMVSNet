@@ -77,7 +77,7 @@ def save_scene_depth(testlist):
 
     test_dataset = MVSDataset(args.testpath, testlist, 
                               max_h=args.max_h, max_w=args.max_w, fix_res=args.fix_res)
-    TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=4, drop_last=False)
+    TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
     # model
     model = TransMVSNet()
@@ -101,7 +101,8 @@ def save_scene_depth(testlist):
             # (Pdb) sample_cuda["proj_matrix"]['stage2'].size() -- [1, 5, 2, 4, 4]
             # (Pdb) sample_cuda["proj_matrix"]['stage3'].size() -- [1, 5, 2, 4, 4]
             # sample_cuda["depth_values"].size() -- torch.Size([1, 192])
-            outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrix"], sample_cuda["depth_values"])
+            outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrix"], \
+                sample_cuda["depth_values"])
             # outputs.keys() -- dict_keys(['stage1', 'depth', 'photo_confidence', 'prob_volume', 'depth_values', 'stage2', 'stage3'])
             #  outputs['stage1'].keys() -- dict_keys(['depth', 'photo_confidence', 'prob_volume', 'depth_values'])
 
@@ -111,11 +112,17 @@ def save_scene_depth(testlist):
             filenames = sample["filename"]
             cams = sample["proj_matrix"]["stage3"].numpy() # Orignal ?
             imgs = sample["imgs"].numpy() # Orignal ?
-            print('Iter {}/{}, Time:{} Res:{}'.format(batch_idx, len(TestImgLoader), end_time - start_time, imgs[0].shape))
+            print('Iter {}/{}, Time:{} Res:{}'.format(batch_idx, len(TestImgLoader), \
+                end_time - start_time, imgs[0].shape))
 
             # save depth maps and confidence maps
-            for filename, cam, img, depth_est, photo_confidence, conf_1, conf_2 in zip(filenames, cams, imgs, \
-                                    outputs["depth"], outputs["photo_confidence"],  outputs['stage1']["photo_confidence"], outputs['stage2']["photo_confidence"]):
+            for filename, cam, img, depth_est, photo_confidence, conf_1, conf_2 \
+                in zip(filenames, cams, imgs, \
+                    outputs["depth"], \
+                    outputs["photo_confidence"], \
+                    outputs['stage1']["photo_confidence"], \
+                    outputs['stage2']["photo_confidence"]):
+
                 # filename --'scan1/{}/00000000{}'
                 img = img[0]  #ref view, img.shape -- (3, 864, 1152)
                 cam = cam[0]  #ref cam, cam.shape -- (2, 4, 4)
@@ -135,17 +142,6 @@ def save_scene_depth(testlist):
                 # (Pdb) depth_est.max() -- 935.0
 
                 depth_est[conf_final < 0.01] = 0.0 # ==> 'disp.dmb'
-                # normal_color = depth_normal(depth_est) # ==> normals.dmb
-
-                # save depth maps
-                # depth_filename = os.path.join(args.outdir, filename.format('depth', '.pfm'))
-                # os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                # depth = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
-                # cv2.imwrite(os.path.join(args.outdir, filename.format('depth', '.png')), depth)
-
-                # normal_filename = os.path.join(args.outdir, filename.format('normal', '.png'))
-                # os.makedirs(normal_filename.rsplit('/', 1)[0], exist_ok=True)
-                # cv2.imwrite(normal_filename, normal_color)
 
                 # save cams, img
                 cam_filename = os.path.join(args.outdir, filename.format('camera', '.txt'))
@@ -156,8 +152,8 @@ def save_scene_depth(testlist):
                 os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
                 img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
                 img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR) # img_bgr.shape -- (864, 1152, 3), dtype=uint8
-                # cv2.imwrite(img_filename, img_bgr)
-                depth = visualize_depth(depth_est, depth_min=425.0, depth_max=935.0)
+
+                depth = depth_normal(depth_est, depth_min=425.0, depth_max=935.0)
                 image = np.concatenate((img_bgr, depth[...,None]), axis=2)
                 cv2.imwrite(img_filename, image)
 

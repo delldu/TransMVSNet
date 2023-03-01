@@ -2,4 +2,4 @@
 #include "point_cloud_list.h"
 
 void dump_gpu_memory();
-int runcuda(GlobalState & gs, PointCloudList & pc_list, int num_views);
+int run_cuda(GlobalState & gs, PointCloudList & pc_list, int num_views);

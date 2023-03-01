@@ -8,7 +8,7 @@ import pdb
 class NanError(Exception):
     pass
 
-def visualize_depth(depth, depth_min=425.0, depth_max=935.0):
+def depth_normal(depth, depth_min=425.0, depth_max=935.0):
     """
     depth hypotheses 425mm to 935mm
     """
@@ -19,30 +19,6 @@ def visualize_depth(depth, depth_min=425.0, depth_max=935.0):
     depth_color = np.uint8(depth_scaled * 255)
 
     return depth_color
-
-def depth_normal(depth):
-    image_shape = np.shape(depth) # (864, 1152)
-    normal_image = np.ones_like(depth)
-    normal_image = np.reshape(normal_image, (image_shape[0], image_shape[1], 1))
-    normal_image = np.tile(normal_image, [1, 1, 3])
-    normal_image = normal_image / 1.732050808
-    # (Pdb) len(normal_image) -- 864
-    # (Pdb) normal_image[0].shape -- (1152, 3)
-    # (Pdb) normal_image[1].shape -- (1152, 3)
-    # (Pdb) normal_image[863].shape -- (1152, 3)
-
-    mask_image = np.squeeze(np.where(depth > 0, 1, 0))
-    mask_image = np.reshape(mask_image, (image_shape[0], image_shape[1], 1))
-    mask_image = np.tile(mask_image, [1, 1, 3])
-    mask_image = np.float32(mask_image)
-    # (Pdb) len(mask_image) -- 864
-    # (Pdb) mask_image[0].shape -- (1152, 3)
-
-    normal_image = np.multiply(normal_image, mask_image)
-    normal_image = np.uint8(normal_image * 255.0) # (864, 1152, 3)
-
-    return normal_image
-
 
 # print arguments
 def print_args(args):

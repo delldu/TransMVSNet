@@ -7,6 +7,7 @@ import pdb
 def depth_map_fusion(mvsout_folder, fusibile_exe_path):
     cmd = fusibile_exe_path + " " + mvsout_folder
     print(cmd)
+
     os.system(cmd)
 
 

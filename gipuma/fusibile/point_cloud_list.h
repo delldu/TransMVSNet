@@ -4,12 +4,10 @@
 #include "managed.h"
 #include <vector_types.h>		// float4
 
-class Point_li {
-  public:
+struct Point_li {
 	float4 coord;				// Point coordinate
 	float texture4[4];			// Average texture color
 };
-
 
 class PointCloudList {
   public:
@@ -21,7 +19,9 @@ class PointCloudList {
 		maximum = n;
 		points = (Point_li *) malloc(sizeof(Point_li) * n);
 		memset(points, 0, sizeof(Point_li) * n);
-	} void double_resize() {
+	}
+
+	void double_resize() {
 		maximum *= 2;
 		points = (Point_li *) realloc(points, maximum * sizeof(Point_li));
 		printf("New size of point cloud list is %d\n", maximum);

@@ -66,7 +66,7 @@ static void add_images_to_texture(vector < Mat > &imgs, cudaTextureObject_t texs
 	}
 }
 
-static int runFusibile(char *input_folder)
+static int run_fusibile(char *input_folder)
 {
 	GlobalState *gs;
 	size_t i, n_rows, n_cols, n_filenames;
@@ -117,7 +117,7 @@ static int runFusibile(char *input_folder)
 
 	// GS Camera
 	gs->cameras = new CameraParameters_cu;
-	getCameraParameters(*(gs->cameras), camera_filenames);
+	get_camera_parameters(*(gs->cameras), camera_filenames);
 	gs->cameras->cols = n_cols;
 	gs->cameras->rows = n_rows;
 
@@ -153,9 +153,10 @@ static int runFusibile(char *input_folder)
 	add_images_to_texture(color_images_list, gs->color_images_textures);
 
 	dump_gpu_memory();
-	runcuda(*gs, pc_list, n_filenames);
+	run_cuda(*gs, pc_list, n_filenames);
 
 	// pc_list.size = 1024000;
+	// xxxx8888
 	dump_gpu_memory();
 	snprintf(file_name, sizeof(file_name), "%s/3d_model.ply", output_folder);
 	save_point_cloud(file_name, pc_list);
@@ -171,7 +172,7 @@ int main(int argc, char **argv)
 	}
 
 	for (int i = 1; i < argc; i++)
-		runFusibile(argv[i]);
+		run_fusibile(argv[i]);
 
 	return 0;
 }
