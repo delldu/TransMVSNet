@@ -139,20 +139,20 @@ void get_camera_parameters(CameraParameters_cu & gs_cameras,
 		// Do what ?
 		Mat_ < float >C = getCameraCenter(cameras[i].P);
 		C = C / C(3, 0);
-		cameras[i].C3 = Vec3f(C(0, 0), C(1, 0), C(2, 0));
+		Vec3f C3 = Vec3f(C(0, 0), C(1, 0), C(2, 0));
 
 
-		cameras[i].R_inv = cameras[i].P.colRange(0, 3).inv();
+		cameras[i].RK_inv = cameras[i].P.colRange(0, 3).inv(); // Here !!! RK_inv == R_inverse * K_inverse
 
 		// K
 		copyOpencvMatToFloatArray(cameras[i].K, &gs_cameras.cameras[i].K);
 
 		// Copy data to cuda structure
 		copyOpencvMatToFloatArray(cameras[i].P, &gs_cameras.cameras[i].P);
-		copyOpencvMatToFloatArray(cameras[i].R_inv, &gs_cameras.cameras[i].R_inv);
+		copyOpencvMatToFloatArray(cameras[i].RK_inv, &gs_cameras.cameras[i].RK_inv);
 		copyOpencvMatToFloatArray(cameras[i].K, &gs_cameras.cameras[i].K);
 		copyOpencvMatToFloatArray(cameras[i].R, &gs_cameras.cameras[i].R);
-		copyOpencvVecToFloat4(cameras[i].C3, &gs_cameras.cameras[i].C4);
+		copyOpencvVecToFloat4(C3, &gs_cameras.cameras[i].C4);
 
 		Mat_ < float >tmp = cameras[i].P.col(3);
 		gs_cameras.cameras[i].P_col34.x = tmp(0, 0);

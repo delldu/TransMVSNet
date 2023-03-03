@@ -12,10 +12,7 @@ struct Camera {
 	Mat_ < float >P;
 	Mat_ < float >K;
 	Mat_ < float >R;
-	Mat_ < float >T;
-	Mat_ < float >R_inv;
-
-	Vec3f C3;					// Camera Center (x, y, z),
+	Mat_ < float >RK_inv; // R_inverse * K_inverse
 };
 
 class Camera_cu:public Managed {
@@ -23,8 +20,8 @@ class Camera_cu:public Managed {
 	float *P;
 	float *K;
 	float *R;
-	float *R_inv;
-	float4 P_col34;				// P.col(3), like t ?
+	float *RK_inv;
+	float4 P_col34;				// P.col(3) == like t
 
 	float4 C4;					// Camera center ?
 
@@ -32,14 +29,14 @@ class Camera_cu:public Managed {
 		 cudaMallocManaged(&P, sizeof(float) * 4 * 4);
 		 cudaMallocManaged(&K, sizeof(float) * 4 * 4);
 		 cudaMallocManaged(&R, sizeof(float) * 4 * 4);
-		 cudaMallocManaged(&R_inv, sizeof(float) * 4 * 4);
+		 cudaMallocManaged(&RK_inv, sizeof(float) * 4 * 4);
 	}
 
 	 ~Camera_cu() {
 		cudaFree(P);
 		cudaFree(K);
 		cudaFree(R);
-		cudaFree(R_inv);
+		cudaFree(RK_inv);
 	}
 };
 

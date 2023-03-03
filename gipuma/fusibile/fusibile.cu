@@ -65,7 +65,7 @@ __device__ FORCEINLINE void get_3dpoint_cu(
 								  depth * (float) p.y - cam.P_col34.y,
 								  depth - cam.P_col34.z,
 								  0);
-	matvecmul4(cam.R_inv, pt, ptX);
+	matvecmul4(cam.RK_inv, pt, ptX);
 }
 
 #define matvecmul4P(m, v, out) \
@@ -106,6 +106,7 @@ __global__ void fusibile(GlobalState & gs, int ref_camera)
 	float4 sum_T = tex2D < float4 > (gs.color_images_textures[ref_camera],
 											p.x + 0.5f, p.y + 0.5f);
 	float depth = sum_T.w;
+	// xxxx8888
 	if (depth <= 425.001) // 1.0/255.0 -- 0.0039
 		return;
 
@@ -132,7 +133,7 @@ __global__ void fusibile(GlobalState & gs, int ref_camera)
 		float4 tmp_T = tex2D < float4 > (gs.color_images_textures[i], 
 			tmp_pt.x + 0.5f, tmp_pt.y + 0.5f);
 
-		if (tmp_T.w <= 425.001) // 1.0/255.0 -- 0.0039
+		if (tmp_T.w <= 425.001) // 1.0/255.0 -- 0.0039, xxxx8888
 			continue;
 
 		const float depth_disp = depth_convert_cu(

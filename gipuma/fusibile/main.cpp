@@ -141,7 +141,7 @@ static int run_fusibile(char *input_folder)
 		split(rgba, rgba_channels);	// C++
 
 		Mat_ < float >depth = rgba_channels.at(3);	// Save depth
-		depth = 425.0 + 512.0 * depth;
+		depth = 425.0 + 512.0 * depth; // xxxx8888
 		rgba_channels.pop_back();
 		rgba_channels.push_back(depth);
 
@@ -156,7 +156,6 @@ static int run_fusibile(char *input_folder)
 	run_cuda(*gs, pc_list, n_filenames);
 
 	// pc_list.size = 1024000;
-	// xxxx8888
 	dump_gpu_memory();
 	snprintf(file_name, sizeof(file_name), "%s/3d_model.ply", output_folder);
 	save_point_cloud(file_name, pc_list);
